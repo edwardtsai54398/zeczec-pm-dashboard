@@ -274,10 +274,9 @@ button { cursor: pointer; }
   display: grid;
   gap: 18px;
 }
-.grid-2 { grid-template-columns: minmax(0, 380px) minmax(0, 1fr); }
-.grid-2b { grid-template-columns: minmax(0, 380px) minmax(0, 1fr); }
+.grid-2 { grid-template-columns: 1fr 1fr; }
 @media (max-width: 1100px) {
-  .grid-2, .grid-2b { grid-template-columns: 1fr; }
+  .grid-2 { grid-template-columns: 1fr; }
 }
 
 .card {
@@ -287,6 +286,20 @@ button { cursor: pointer; }
   box-shadow: var(--shadow);
   position: relative;
   overflow: hidden;
+}
+.card.overdue-card {
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+}
+.overdue-badge {
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+  border-radius: 10px;
+  padding: 2px 8px;
+  min-width: 20px;
+  text-align: center;
 }
 .card-soft {
   background: var(--surface-soft);
