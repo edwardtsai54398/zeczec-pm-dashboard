@@ -1,10 +1,10 @@
 import { useState, useMemo } from 'react';
-import { dBt, fmt, fmtF, addD } from '../lib/dateUtils.js';
+import { dBt, fmt, addD } from '../lib/dateUtils.js';
 import { PH } from '../lib/tasks.js';
 import { getTone, WEEK, greetingFor } from './shared.js';
 
 export function Dashboard({ projects, data, miles, onAddProject, onJump }) {
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
   const hr = new Date().getHours();
 
   const allTasks = useMemo(() => {
@@ -15,11 +15,12 @@ export function Dashboard({ projects, data, miles, onAddProject, onJump }) {
     return out;
   }, [projects, data]);
 
-  const tdy = [], soon = [];
+  const tdy = [], soon = [], overdue = [];
   allTasks.forEach((t) => {
     const a = new Date(t.start), b = new Date(t.end);
     a.setHours(0, 0, 0, 0); b.setHours(0, 0, 0, 0);
-    if (a <= today && b >= today) tdy.push(t);
+    if (b < today) overdue.push(t);
+    else if (a <= today && b >= today) tdy.push(t);
     else if (a > today && dBt(today, a) <= 7) soon.push(t);
   });
   soon.sort((a, b) => new Date(a.start) - new Date(b.start));
@@ -70,13 +71,11 @@ export function Dashboard({ projects, data, miles, onAddProject, onJump }) {
         </div>
       </section>
 
-      <div className="grid grid-2">
-        <MilestonesCard projects={projects} miles={miles} onJump={onJump} />
-        <TimelineCard tasks={timelineTasks} projects={projects} today={today} days={timelineDays} />
-      </div>
-
-      <div className="grid grid-2b" style={{ marginTop: 18 }}>
+      <div className="dash-cards">
+        {overdue.length > 0 && <OverdueCard tasks={overdue} today={today} />}
         <TodoCard tasks={tdy.concat(soon).slice(0, 6)} today={today} />
+        <TimelineCard tasks={timelineTasks} today={today} days={timelineDays} />
+        <MilestonesCard projects={projects} miles={miles} onJump={onJump} />
         <LoadChart allTasks={allTasks} today={today} />
       </div>
     </div>
@@ -129,7 +128,7 @@ function MilestonesCard({ projects, miles, onJump }) {
   );
 }
 
-function TimelineCard({ tasks, projects, today, days }) {
+function TimelineCard({ tasks, today, days }) {
   const colWidth = 100 / days;
   const dayLabels = Array.from({ length: days }, (_, i) => {
     const d = addD(today, i);
@@ -226,6 +225,42 @@ function TodoCard({ tasks, today }) {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+function OverdueCard({ tasks, today }) {
+  return (
+    <div className="card overdue-card">
+      <div className="card-title">
+        <span>過期未完成</span>
+        <span className="overdue-badge">{tasks.length}</span>
+      </div>
+      <p className="card-sub">已超過結束日期但尚未完成的任務</p>
+      <div className="todo-list">
+        {tasks.slice(0, 5).map((t, i) => {
+          const tone = getTone(t._proj);
+          const daysLate = dBt(new Date(t.end), today);
+          return (
+            <div key={t.id + "_" + i} className="todo-row">
+              <div className="todo-text">
+                <div className="todo-name">{t.n}</div>
+                <div className="todo-meta">
+                  {t._proj.name} · 逾期 {daysLate} 天
+                </div>
+              </div>
+              <span className="todo-tag" style={{ background: tone.bg, color: tone.ink }}>
+                {(PH[t.p] || {}).n || "—"}
+              </span>
+            </div>
+          );
+        })}
+        {tasks.length > 5 && (
+          <div className="todo-meta" style={{ textAlign: "center", marginTop: 8 }}>
+            還有 {tasks.length - 5} 項...
+          </div>
+        )}
       </div>
     </div>
   );
