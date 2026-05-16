@@ -999,6 +999,22 @@ textarea.text-in { resize: vertical; min-height: 64px; }
 .g2-bar-hrs { font-size: 10px; opacity: .7; font-variant-numeric: tabular-nums; margin-left: auto; padding-left: 6px; }
 .g2-overlay .g2-bar-hrs { display: none; }
 
+/* wait bars (client review period after task) */
+.g2-bar-wait {
+  position: absolute; top: 8px; bottom: 8px;
+  border-radius: 4px; padding: 0 6px;
+  display: flex; align-items: center;
+  background: rgba(0,0,0,0.04);
+  box-shadow: inset 0 0 0 1.5px rgba(0,0,0,0.10);
+  pointer-events: none;
+  white-space: nowrap; overflow: hidden;
+  z-index: 1;
+}
+.g2-bar-wait-label {
+  font-size: 10px; color: var(--ink-4);
+  letter-spacing: .02em;
+}
+
 /* placeholder bars (0-hour tasks) */
 .g2-bar.placeholder {
   background: transparent !important;
@@ -1013,13 +1029,21 @@ textarea.text-in { resize: vertical; min-height: 64px; }
   width: 0; border-left: 2px dashed;
   z-index: 3; pointer-events: none; opacity: .6;
 }
-.g2-milestone.lavender { border-color: var(--t-lavender-ink); }
-.g2-milestone.lime     { border-color: var(--t-lime-ink); }
-.g2-milestone.peach    { border-color: var(--t-peach-ink); }
-.g2-milestone.rose     { border-color: var(--t-rose-ink); }
-.g2-milestone.sky      { border-color: var(--t-sky-ink); }
-.g2-milestone.olive    { border-color: var(--t-olive-ink); }
-.g2-milestone.charcoal { border-color: var(--t-charcoal-ink); }
+.g2-milestone.lavender { border-color: var(--t-lavender-ink); color: var(--t-lavender-ink); }
+.g2-milestone.lime     { border-color: var(--t-lime-ink);     color: var(--t-lime-ink); }
+.g2-milestone.peach    { border-color: var(--t-peach-ink);    color: var(--t-peach-ink); }
+.g2-milestone.rose     { border-color: var(--t-rose-ink);     color: var(--t-rose-ink); }
+.g2-milestone.sky      { border-color: var(--t-sky-ink);      color: var(--t-sky-ink); }
+.g2-milestone.olive    { border-color: var(--t-olive-ink);    color: var(--t-olive-ink); }
+.g2-milestone.charcoal { border-color: var(--t-charcoal-ink); color: var(--t-charcoal-ink); }
+.g2-milestone-label {
+  position: absolute; top: 4px;
+  left: 0; transform: translateX(-50%);
+  font-size: 10px; line-height: 1.3; font-weight: 600;
+  text-align: center; white-space: nowrap;
+  color: inherit; pointer-events: none;
+  background: var(--bg); padding: 1px 4px; border-radius: 3px;
+}
 
 /* tooltip */
 .g2-tooltip {

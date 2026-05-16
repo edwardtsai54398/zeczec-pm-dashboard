@@ -70,7 +70,7 @@ export function runSchedule(projects, settings) {
         if (ds) {
           let af = addD(ds.end, 1);
           const dt = tm[did];
-          if (dt && dt.w > 0) af = aWD(ds.end, dt.w, bl);
+          if (dt && dt.w > 0) af = addD(aWD(ds.end, dt.w, bl), 1);
           af = nWD(af, bl);
           if (af > ear) ear = af;
         }
@@ -108,7 +108,8 @@ export function runSchedule(projects, settings) {
         }
       }
 
-      sch[id] = { ...task, start: tS, end: tE, pid: proj.id, pn: proj.name };
+      const waitEnd = task.w > 0 ? aWD(tE, task.w, bl) : null;
+      sch[id] = { ...task, start: tS, end: tE, waitEnd, pid: proj.id, pn: proj.name };
     }
 
     const svB = Object.values(sch).filter((t) => t.dl === "sv");

@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { dBt, addD, fmt, pD } from '../lib/dateUtils.js';
-import { getTone, TONES } from './shared.js';
+import { TONES } from './shared.js';
 
 const LABEL_W = 240;
 const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -440,7 +440,11 @@ export function Gantt({ projects, data }) {
                 {milestones.map((ms, i) => (
                   <div key={i} className={`g2-milestone ${ms.tk}`}
                     style={{ left: ms.off * COL_W + COL_W / 2 }}
-                    title={`${ms.pName}: ${ms.label}`} />
+                    title={`${ms.pName}: ${ms.label}`}>
+                    <span className="g2-milestone-label">
+                      {ms.pName}<br />{ms.label}
+                    </span>
+                  </div>
                 ))}
 
                 {overlayMode ? (
@@ -450,18 +454,25 @@ export function Gantt({ projects, data }) {
                         <div key={i} className={`g2-grid-cell${d.isWE ? ' weekend' : ''}`}
                           style={{ width: COL_W }} />
                       ))}
-                      {bars.map(({ p, t, tk }) =>
-                        barSegments(t.start, t.end, viewStart).map((seg, si) => (
-                          <div key={`${p.id}-${si}`}
-                            className={`g2-bar ${tk}${t.hours === 0 ? ' placeholder' : ''}`}
-                            style={{ left: seg.cs * COL_W + 2, width: seg.span * COL_W - 4 }}
-                            onMouseEnter={(e) => handleBarEnter(e, t, p)}
-                            onMouseLeave={handleBarLeave}>
-                            <span className="g2-bar-dot"></span>
-                            <span className="g2-bar-name">{p.name.split(' ')[0]}</span>
-                          </div>
-                        ))
-                      )}
+                      {bars.map(({ p, t, tk }) => (
+                        <div key={p.id}>
+                          {barSegments(t.start, t.end, viewStart).map((seg, si) => (
+                            <div key={`${p.id}-${si}`}
+                              className={`g2-bar ${tk}${t.hours === 0 ? ' placeholder' : ''}`}
+                              style={{ left: seg.cs * COL_W + 2, width: seg.span * COL_W - 4 }}
+                              onMouseEnter={(e) => handleBarEnter(e, t, p)}
+                              onMouseLeave={handleBarLeave}>
+                              <span className="g2-bar-dot"></span>
+                              <span className="g2-bar-name">{p.name.split(' ')[0]}</span>
+                            </div>
+                          ))}
+                          {t.waitEnd && barSegments(addD(t.end, 1), t.waitEnd, viewStart).map((seg, si) => (
+                            <div key={`w${p.id}-${si}`}
+                              className="g2-bar-wait"
+                              style={{ left: seg.cs * COL_W + 2, width: seg.span * COL_W - 4 }} />
+                          ))}
+                        </div>
+                      ))}
                     </div>
                   ))
                 ) : (
@@ -491,6 +502,13 @@ export function Gantt({ projects, data }) {
                               )}
                             </div>
                           ))}
+                          {t.waitEnd && barSegments(addD(t.end, 1), t.waitEnd, viewStart).map((seg, si) => (
+                            <div key={`w${si}`}
+                              className="g2-bar-wait"
+                              style={{ left: seg.cs * COL_W + 2, width: seg.span * COL_W - 4 }}>
+                              {si === 0 && <span className="g2-bar-wait-label">等待</span>}
+                            </div>
+                          ))}
                         </div>
                       ))}
                     </div>
@@ -510,7 +528,7 @@ export function Gantt({ projects, data }) {
             </span>
           </div>
           <div>
-            <kbd>←</kbd> <kbd>→</kbd> 切換週　　<kbd>T</kbd> 回今天
+            <kbd>←</kbd> <kbd>→</kbd> 切換週 <kbd>T</kbd> 回今天
           </div>
         </div>
       </div>
