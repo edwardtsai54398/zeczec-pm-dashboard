@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { dBt, fmt, addD } from '../lib/dateUtils.js';
+import { dBt, fmt } from '../lib/dateUtils.js';
 import { PH } from '../lib/tasks.js';
 import { getTone, WEEK, greetingFor } from './shared.js';
 
@@ -76,7 +76,6 @@ export function Dashboard({ projects, data, miles, onAddProject, onJump }) {
         <TodoCard tasks={tdy.concat(soon).slice(0, 6)} today={today} />
         <TimelineCard tasks={timelineTasks} today={today} days={timelineDays} />
         <MilestonesCard projects={projects} miles={miles} onJump={onJump} />
-        <LoadChart allTasks={allTasks} today={today} />
       </div>
     </div>
   );
@@ -244,72 +243,3 @@ function OverdueCard({ tasks, today }) {
   );
 }
 
-function LoadChart({ allTasks, today }) {
-  const days = 14, hpd = 8;
-
-  const loads = Array.from({ length: days }, (_, i) => {
-    const d = addD(today, i);
-    let h = 0;
-    allTasks.forEach((t) => {
-      const s = new Date(t.start), e = new Date(t.end);
-      s.setHours(0, 0, 0, 0); e.setHours(0, 0, 0, 0);
-      const sd = dBt(today, s), ed = dBt(today, e);
-      if (i < sd || i > ed) return;
-      h += (t.hours || 0) / Math.max(1, ed - sd + 1);
-    });
-    return { i, d, h };
-  });
-
-  const max = Math.max(hpd, ...loads.map((x) => x.h)) * 1.2;
-  const W = 100, H = 100;
-  const pts = loads.map((p, i) => ({
-    x: (i / (days - 1)) * W,
-    y: H - (p.h / max) * H,
-    p,
-  }));
-  const path = pts.map((pt, i) => `${i === 0 ? "M" : "L"} ${pt.x} ${pt.y}`).join(" ");
-  const fillPath = `${path} L ${W} ${H} L 0 ${H} Z`;
-  const peakIdx = loads.reduce((bi, x, i) => x.h > loads[bi].h ? i : bi, 0);
-  const peak = pts[peakIdx];
-
-  return (
-    <div className="card">
-      <div className="card-title">
-        <span>工時負載</span>
-        <span style={{ display: "flex", gap: 6 }}>
-          <button className="card-icon-btn"><i className="ti ti-adjustments-horizontal"></i></button>
-          <button className="card-icon-btn"><i className="ti ti-arrow-up-right"></i></button>
-        </span>
-      </div>
-      <p className="card-sub">未來 14 天的每日工時（基準 {hpd}hr/天）</p>
-
-      <div className="chart-wrap" style={{ height: 200 }}>
-        <div className="chart-pill" style={{ left: `${peak.x}%`, top: `${peak.y + 8}%` }}>
-          {Math.round(peak.p.h)}hr
-        </div>
-        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" height="100%" style={{ overflow: "visible" }}>
-          <defs>
-            <linearGradient id="loadg" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="var(--accent-deep)" stopOpacity="0.18" />
-              <stop offset="100%" stopColor="var(--accent-deep)" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          <line x1="0" y1={H - (hpd / max) * H} x2={W} y2={H - (hpd / max) * H}
-                stroke="var(--ink-4)" strokeWidth="0.3" strokeDasharray="0.8 1.2" />
-          <path d={fillPath} fill="url(#loadg)" />
-          <path d={path} fill="none" stroke="var(--ink)" strokeWidth="0.8"
-                vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
-          {pts.map((pt, i) => (
-            <circle key={i} cx={pt.x} cy={pt.y} r="1.2" fill="white" stroke="var(--ink)" strokeWidth="0.4" vectorEffect="non-scaling-stroke" />
-          ))}
-          <circle cx={peak.x} cy={peak.y} r="2" fill="var(--accent-deep)" />
-        </svg>
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--ink-3)", marginTop: 8, padding: "0 2px" }}>
-        {[0, Math.floor(days / 2), days - 1].map((i) => (
-          <span key={i}>{loads[i].d.getMonth() + 1}/{loads[i].d.getDate()}</span>
-        ))}
-      </div>
-    </div>
-  );
-}
