@@ -1,291 +1,526 @@
-import { useState, useMemo, useCallback } from 'react';
-import { dBt, fmt, pD, addD } from '../lib/dateUtils.js';
-import { getTone } from './shared.js';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { dBt, addD, fmt, pD } from '../lib/dateUtils.js';
+import { getTone, TONES } from './shared.js';
+
+const LABEL_W = 240;
+const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+const MONTH_EN = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
 const ZOOM_LEVELS = [
-  { key: 'week',  label: '週', dw: 90 },
-  { key: 'day',   label: '日', dw: 18 },
-  { key: 'hour',  label: '時', dw: 72 },
+  { key: 'hour', colW: 80, viewDays: 14, label: '時', icon: 'ti-clock' },
+  { key: 'day',  colW: 52, viewDays: 21, label: '日', icon: 'ti-calendar' },
+  { key: 'week', colW: 24, viewDays: 42, label: '週', icon: 'ti-calendar-month' },
 ];
 
-const WEEK_LABELS = ["日", "一", "二", "三", "四", "五", "六"];
+function toneKey(p) {
+  if (p?.tone && TONES[p.tone]) return p.tone;
+  return 'lavender';
+}
 
-export function Gantt({ projects, data }) {
-  const [zoom, setZoom] = useState('day');
-  const [filter, setFilter] = useState(null);
-  const [tip, setTip] = useState(null);
+function monday(d) {
+  const r = new Date(d);
+  r.setHours(0, 0, 0, 0);
+  const dow = r.getDay();
+  r.setDate(r.getDate() - (dow === 0 ? 6 : dow - 1));
+  return r;
+}
 
-  const zoomCfg = ZOOM_LEVELS.find((z) => z.key === zoom);
-  const dw = zoomCfg.dw;
+function barSegments(startD, endD, gridStart) {
+  if (!startD || !endD) return [];
+  const gs = new Date(gridStart); gs.setHours(0, 0, 0, 0);
+  const end = new Date(endD); end.setHours(0, 0, 0, 0);
+  if (isNaN(gs) || isNaN(end)) return [];
 
-  const visibleProjects = filter
-    ? projects.filter((p) => p.id === filter)
-    : projects;
+  const segments = [];
+  let segStart = null;
+  let cur = new Date(startD); cur.setHours(0, 0, 0, 0);
 
-  let mn = null, mx = null;
-  projects.forEach((p) => {
-    Object.values(data[p.id] || {}).forEach((t) => {
-      const a = new Date(t.start), b = new Date(t.end);
-      if (!mn || a < mn) mn = a;
-      if (!mx || b > mx) mx = b;
-    });
-  });
-
-  if (!mn) {
-    return <div className="empty"><i className="ti ti-chart-gantt"></i>設定啟動日期後即可看到甘特圖</div>;
+  while (cur <= end) {
+    const dow = cur.getDay();
+    if (dow !== 0 && dow !== 6) {
+      if (!segStart) segStart = new Date(cur);
+    } else if (segStart) {
+      let lastWD = new Date(cur);
+      lastWD.setDate(lastWD.getDate() - 1);
+      while (lastWD.getDay() === 0 || lastWD.getDay() === 6) lastWD.setDate(lastWD.getDate() - 1);
+      const cs = Math.round((segStart - gs) / 864e5);
+      const span = Math.round((lastWD - segStart) / 864e5) + 1;
+      if (span > 0) segments.push({ cs, span });
+      segStart = null;
+    }
+    cur = new Date(cur);
+    cur.setDate(cur.getDate() + 1);
   }
 
-  mn = addD(mn, -3); mx = addD(mx, 7);
-  const total = dBt(mn, mx) + 1;
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const tOff = dBt(mn, today);
+  if (segStart) {
+    let lastWD = new Date(end);
+    while (lastWD.getDay() === 0 || lastWD.getDay() === 6) lastWD.setDate(lastWD.getDate() - 1);
+    if (lastWD >= segStart) {
+      const cs = Math.round((segStart - gs) / 864e5);
+      const span = Math.round((lastWD - segStart) / 864e5) + 1;
+      if (span > 0) segments.push({ cs, span });
+    }
+  }
 
-  const groups = visibleProjects
-    .map((p) => {
-      const s = data[p.id];
-      if (!s || !Object.keys(s).length) return null;
-      return { p, ts: Object.values(s).sort((a, b) => new Date(a.start) - new Date(b.start)) };
-    })
-    .filter(Boolean);
+  return segments;
+}
 
-  const dayMeta = useMemo(() => {
+export function Gantt({ projects, data }) {
+  const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+
+  const [zoomIdx, setZoomIdx] = useState(1);
+  const zoom = ZOOM_LEVELS[zoomIdx];
+  const COL_W = zoom.colW;
+  const MIN_VIEW_DAYS = zoom.viewDays;
+
+  const dateRange = useMemo(() => {
+    let earliest = null, latest = null;
+    projects.forEach(p => {
+      Object.values(data[p.id] || {}).forEach(t => {
+        if (t.start) {
+          const s = new Date(t.start);
+          if (!earliest || s < earliest) earliest = s;
+        }
+        if (t.end) {
+          const e = new Date(t.end);
+          if (!latest || e > latest) latest = e;
+        }
+      });
+    });
+    return { earliest, latest };
+  }, [projects, data]);
+
+  const [viewStart, setViewStart] = useState(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+
+  const VIEW_DAYS = useMemo(() => {
+    if (!dateRange.latest) return MIN_VIEW_DAYS;
+    const endPlusWeek = addD(dateRange.latest, 7);
+    const span = dBt(viewStart, endPlusWeek);
+    return Math.max(MIN_VIEW_DAYS, span + 1);
+  }, [dateRange.latest, viewStart, MIN_VIEW_DAYS]);
+
+  const [overlayMode, setOverlayMode] = useState(false);
+  const [selected, setSelected] = useState(() => new Set(projects.map(p => p.id)));
+  const [tip, setTip] = useState(null);
+
+  const toggleProject = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) { if (next.size > 1) next.delete(id); }
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectedProjects = projects.filter(p => selected.has(p.id));
+
+  const gridDays = useMemo(() => {
     const arr = [];
-    for (let i = 0; i < total; i++) {
-      const d = addD(mn, i);
-      const day = d.getDay();
-      arr.push({ date: d, isWeekend: day === 0 || day === 6, day });
+    for (let i = 0; i < VIEW_DAYS; i++) {
+      const d = addD(viewStart, i);
+      const dow = d.getDay();
+      arr.push({ date: d, isWE: dow === 0 || dow === 6, dow });
     }
     return arr;
-  }, [mn, total]);
+  }, [viewStart, VIEW_DAYS]);
 
-  const headers = useMemo(() => {
-    if (zoom === 'week') {
-      const weeks = [];
-      let i = 0;
-      while (i < total) {
-        const d = dayMeta[i].date;
-        const dow = d.getDay();
-        const toMonday = dow === 0 ? 6 : dow - 1;
-        const weekStart = i;
-        let weekEnd = i;
-        while (weekEnd + 1 < total) {
-          const nd = dayMeta[weekEnd + 1].date;
-          if (nd.getDay() === 1 && weekEnd > weekStart) break;
-          weekEnd++;
-        }
-        const span = weekEnd - weekStart + 1;
-        const m = d.getMonth() + 1;
-        const dd = d.getDate();
-        weeks.push({ key: `w${i}`, label: `${m}/${dd}`, s: weekStart, span });
-        i = weekEnd + 1;
-      }
-      return weeks;
-    }
+  const todayOffset = dBt(viewStart, today);
+  const todayVisible = todayOffset >= 0 && todayOffset < VIEW_DAYS;
 
-    const mos = [];
-    let c = new Date(mn);
-    while (c <= mx) {
-      const m = c.getMonth(), y = c.getFullYear(), k = `${y}-${m}`;
-      if (!mos.length || mos[mos.length - 1].k !== k) {
-        mos.push({ k, label: `${y} / ${String(m + 1).padStart(2, "0")}`, s: dBt(mn, c) });
+  const monthLabels = useMemo(() => {
+    const labels = [];
+    let prevMonth = -1;
+    gridDays.forEach((d, i) => {
+      const m = d.date.getMonth();
+      if (m !== prevMonth) {
+        labels.push({ idx: i, label: `${MONTH_EN[m]} ${d.date.getFullYear()}` });
+        prevMonth = m;
       }
-      c = addD(c, 1);
-    }
-    return mos.map((m, i) => {
-      const nx = mos[i + 1]?.s || total;
-      return { key: m.k, label: m.label, s: m.s, span: nx - m.s };
     });
-  }, [zoom, mn, mx, total, dayMeta]);
+    return labels;
+  }, [gridDays]);
 
-  const trackWidth = zoom === 'week'
-    ? headers.reduce((s, h) => s + h.span * dw / 7, 0)
-    : total * dw;
+  const scrollRef = useRef(null);
 
-  const colWidth = zoom === 'week' ? dw / 7 : dw;
+  const [dateLabel, setDateLabel] = useState(() => {
+    const m = viewStart.getMonth() + 1;
+    const y = viewStart.getFullYear();
+    return `${y} 年 ${m} 月`;
+  });
 
-  const barLeft = (startOffset) => {
-    if (zoom === 'week') return startOffset * (dw / 7);
-    return startOffset * dw;
+  const updateDateLabel = useCallback((scrollLeft) => {
+    const dayIdx = Math.round(scrollLeft / COL_W);
+    const visibleDate = addD(viewStart, dayIdx);
+    const m = visibleDate.getMonth() + 1;
+    const y = visibleDate.getFullYear();
+    setDateLabel(`${y} 年 ${m} 月`);
+  }, [viewStart, COL_W]);
+
+  useEffect(() => {
+    updateDateLabel(scrollRef.current?.scrollLeft || 0);
+  }, [viewStart, updateDateLabel]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => updateDateLabel(el.scrollLeft);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [updateDateLabel]);
+
+  const nextWeek = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const currentDayIdx = Math.round(el.scrollLeft / COL_W);
+    const currentDate = addD(viewStart, currentDayIdx);
+    const dow = currentDate.getDay();
+    const daysToMonday = dow === 0 ? 1 : 8 - dow;
+    el.scrollTo({ left: (currentDayIdx + daysToMonday) * COL_W, behavior: 'smooth' });
   };
-  const barWidth = (dur) => {
-    if (zoom === 'week') return Math.max(dur * (dw / 7) - 2, 3);
-    return Math.max(dur * dw - 3, 4);
+
+  const prevWeek = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (el.scrollLeft > 0) {
+      const currentDayIdx = Math.round(el.scrollLeft / COL_W);
+      const currentDate = addD(viewStart, currentDayIdx);
+      const prevMon = monday(addD(currentDate, -1));
+      const targetIdx = dBt(viewStart, prevMon);
+      el.scrollTo({ left: Math.max(0, targetIdx * COL_W), behavior: 'smooth' });
+    } else {
+      setViewStart(monday(addD(viewStart, -7)));
+    }
   };
 
-  const handleBarEnter = useCallback((e, t, pName) => {
+  const goToToday = () => {
+    setViewStart(today);
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ left: 0, behavior: 'smooth' });
+  };
+
+  const handleBarEnter = useCallback((e, t, p) => {
     const rect = e.currentTarget.getBoundingClientRect();
     setTip({
-      text: `${t.n}`,
-      sub: `${fmt(t.start)} – ${fmt(t.end)}${t.hours ? ` · ${t.hours}hr` : ''}`,
-      proj: pName,
       x: rect.left + rect.width / 2,
       y: rect.top,
+      task: t,
+      project: p,
     });
   }, []);
-
   const handleBarLeave = useCallback(() => setTip(null), []);
 
-  const nameColW = 200;
+  const normalGroups = useMemo(() => {
+    return selectedProjects.map(p => {
+      const tasks = Object.values(data[p.id] || {})
+        .filter(t => t.start && t.end)
+        .sort((a, b) => new Date(a.start) - new Date(b.start));
+      return { p, tasks, tk: toneKey(p) };
+    }).filter(({ tasks }) => tasks.length > 0);
+  }, [selectedProjects, data]);
+
+  const overlayRows = useMemo(() => {
+    const taskMap = new Map();
+    for (const p of selectedProjects) {
+      const tk = toneKey(p);
+      for (const [tid, t] of Object.entries(data[p.id] || {})) {
+        if (!t.start || !t.end) continue;
+        if (!taskMap.has(tid)) taskMap.set(tid, { id: t.id, n: t.n, bars: [] });
+        taskMap.get(tid).bars.push({ p, t, tk });
+      }
+    }
+    return [...taskMap.values()].sort((a, b) => {
+      const minA = Math.min(...a.bars.map(x => new Date(x.t.start)));
+      const minB = Math.min(...b.bars.map(x => new Date(x.t.start)));
+      return minA - minB;
+    });
+  }, [selectedProjects, data]);
+
+  const milestones = useMemo(() => {
+    const ms = [];
+    selectedProjects.forEach(p => {
+      const tk = toneKey(p);
+      const add = (d, label) => {
+        const pd = pD(d);
+        if (!pd) return;
+        const off = dBt(viewStart, pd);
+        if (off >= 0 && off < VIEW_DAYS) ms.push({ off, label, tk, pName: p.name });
+      };
+      add(p.surveyStart, '問卷開始');
+      add(p.campaignStart, '上線日');
+      add(p.campaignEnd, '結束日');
+    });
+    return ms;
+  }, [selectedProjects, viewStart, VIEW_DAYS]);
+
+  const totalTasks = useMemo(() => {
+    let n = 0;
+    selectedProjects.forEach(p => {
+      n += Object.values(data[p.id] || {}).length;
+    });
+    return n;
+  }, [selectedProjects, data]);
+
+  const hasData = projects.some(p => Object.keys(data[p.id] || {}).length > 0);
+  if (!projects.length || !hasData) {
+    return (
+      <div className="empty">
+        <i className="ti ti-chart-gantt"></i>
+        設定啟動日期後即可看到甘特圖
+      </div>
+    );
+  }
 
   return (
-    <div className="gantt-wrap">
-      {/* toolbar */}
-      <div className="gantt-toolbar">
-        <div className="gantt-filter-group">
-          <button
-            className={`gantt-filter-btn ${filter === null ? 'active' : ''}`}
-            onClick={() => setFilter(null)}
-          >全部</button>
-          {projects.map((p) => {
-            const tone = getTone(p);
-            return (
-              <button
-                key={p.id}
-                className={`gantt-filter-btn ${filter === p.id ? 'active' : ''}`}
-                onClick={() => setFilter(filter === p.id ? null : p.id)}
-              >
-                <span className="dot" style={{ background: tone.bg, border: `1.5px solid ${tone.ink}` }}></span>
-                {p.name}
-              </button>
-            );
-          })}
+    <div>
+      <section className="g2-page-head">
+        <div>
+          <h1 className="g2-title">
+            {projects.length}個專案<em>，</em>同時推進。
+          </h1>
+          <p className="g2-sub">勾選想看的專案，時間軸自動疊加比對</p>
         </div>
-        <div className="gantt-zoom-group">
-          {ZOOM_LEVELS.map((z) => (
-            <button
-              key={z.key}
-              className={`gantt-zoom-btn ${zoom === z.key ? 'active' : ''}`}
-              onClick={() => setZoom(z.key)}
-            >{z.label}</button>
-          ))}
-        </div>
+      </section>
+
+      <div className="g2-filter-row">
+        <span className="g2-filter-label">專案</span>
+        {projects.map(p => {
+          const tk = toneKey(p);
+          const checked = selected.has(p.id);
+          return (
+            <div key={p.id}
+              className={`g2-chip${checked ? ' checked' : ''} ${tk}`}
+              onClick={() => toggleProject(p.id)}>
+              <span className="g2-checkbox">
+                {checked && <i className="ti ti-check" style={{ fontSize: 10 }}></i>}
+              </span>
+              <span className="g2-dot" style={{ background: `var(--t-${tk}-ink)` }}></span>
+              {p.name}
+            </div>
+          );
+        })}
+        <span className="g2-filter-count">· 顯示 {selected.size} / {projects.length} 個專案</span>
+        <span className="g2-filter-spacer" />
+        <button className="g2-chip-mini"><i className="ti ti-filter"></i> 篩選任務</button>
+        <button className="g2-chip-mini"><i className="ti ti-download"></i> 匯出</button>
       </div>
 
-      <div className="gantt-scroll">
-        <div style={{ minWidth: nameColW + trackWidth }}>
-          {/* header */}
-          <div className="gantt-header">
-            <div className="gantt-corner">PROJECT</div>
-            <div className="gantt-months" style={{ width: trackWidth }}>
-              {headers.map((h) => (
-                <div key={h.key} className="gantt-month"
-                  style={{ width: zoom === 'week' ? h.span * dw / 7 : h.span * dw }}>
-                  {h.label}
-                </div>
-              ))}
-            </div>
+      <div className="g2-card">
+        <div className="g2-toolbar">
+          <div className="g2-date-nav">
+            <button className="g2-nav-btn" onClick={prevWeek}>
+              <i className="ti ti-chevron-left"></i>
+            </button>
+            <span className="g2-date-label">{dateLabel}</span>
+            <button className="g2-nav-btn" onClick={nextWeek}>
+              <i className="ti ti-chevron-right"></i>
+            </button>
+            <button className="g2-today-btn" onClick={goToToday}>
+              <i className="ti ti-target" style={{ fontSize: 11, marginRight: 4 }}></i>
+              回到今天
+            </button>
           </div>
 
-          {/* day sub-header for day/hour modes */}
-          {(zoom === 'day' || zoom === 'hour') && (
-            <div className="gantt-header gantt-day-header">
-              <div className="gantt-corner gantt-day-corner"></div>
-              <div className="gantt-day-row" style={{ width: trackWidth }}>
-                {dayMeta.map((d, i) => (
-                  <div key={i}
-                    className={`gantt-day-cell ${d.isWeekend ? 'weekend' : ''} ${i === tOff ? 'today' : ''}`}
-                    style={{ width: colWidth }}>
-                    <span className="gantt-day-num">{d.date.getDate()}</span>
-                    <span className="gantt-day-wd">{WEEK_LABELS[d.day]}</span>
-                  </div>
-                ))}
+          <div className="g2-toolbar-right">
+            <button
+              className={`g2-mode-toggle${overlayMode ? ' active' : ''}`}
+              onClick={() => setOverlayMode(v => !v)}>
+              <span className="g2-mode-icon">
+                <span className="g2-layer a"></span>
+                <span className="g2-layer b"></span>
+              </span>
+              疊圖模式
+              <i className="ti ti-arrows-shuffle" style={{ fontSize: 13, opacity: .55, marginLeft: 2 }}></i>
+            </button>
+
+            <div className="g2-legend">
+              <div className="g2-legend-item">
+                <span className="g2-swatch we"></span>週末
+              </div>
+              <div className="g2-legend-item">
+                <span className="g2-swatch tl"></span>今天
+              </div>
+              <div className="g2-legend-item">
+                <span className="g2-swatch ms"></span>里程碑
               </div>
             </div>
-          )}
 
-          {/* body */}
-          <div className="gantt-body">
-            {/* vertical grid lines + weekend shading */}
-            <div className="gantt-grid-layer" style={{ left: nameColW, right: 0 }}>
-              {dayMeta.map((d, i) => (
-                <div key={i}
-                  className={`gantt-grid-col ${d.isWeekend ? 'weekend' : ''}`}
-                  style={{ left: i * colWidth, width: colWidth }}
-                />
+            <div className="g2-zoom-toggle">
+              {ZOOM_LEVELS.map((z, i) => (
+                <button key={z.key}
+                  className={i === zoomIdx ? 'active' : ''}
+                  onClick={() => setZoomIdx(i)}>
+                  <i className={`ti ${z.icon}`} style={{ fontSize: 13 }}></i>{z.label}
+                </button>
               ))}
             </div>
 
-            {/* today line */}
-            {tOff >= 0 && tOff < total && (
-              <div className="gantt-today" style={{ left: nameColW + tOff * colWidth }}></div>
-            )}
+            <button className="g2-icon-sq" title="設定">
+              <i className="ti ti-adjustments-horizontal"></i>
+            </button>
+            <button className="g2-icon-sq" title="全螢幕">
+              <i className="ti ti-maximize"></i>
+            </button>
+          </div>
+        </div>
 
-            {groups.map(({ p, ts }) => {
-              const tone = getTone(p);
-              return (
-                <div key={p.id}>
-                  {/* project header row */}
-                  <div className="gantt-rowg">
-                    <div className="gantt-namecol">
-                      <div className="gantt-phase-head" style={{ background: tone.bg, color: tone.ink }}>
-                        <span className="sw" style={{ background: tone.ink }}></span>
+        <div className="g2-scroll" ref={scrollRef}>
+          <div className="g2-grid" style={{ minWidth: LABEL_W + COL_W * VIEW_DAYS }}>
+
+            <aside className="g2-task-col">
+              {overlayMode ? (
+                <>
+                  <div className="g2-col-head">任務 · 多專案疊加</div>
+                  {overlayRows.map(({ id, n, bars }) => (
+                    <div key={id} className="g2-task-name">
+                      <span className="g2-pid">{id}</span>
+                      <span className="g2-name">{n}</span>
+                      <span className="g2-proj-dots">
+                        {bars.map(({ p, tk }) => (
+                          <span key={p.id} className={`g2-pd ${tk}`}></span>
+                        ))}
+                      </span>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <div className="g2-col-head">任務</div>
+                  {normalGroups.map(({ p, tasks, tk }) => (
+                    <div key={p.id}>
+                      <div className={`g2-proj-banner ${tk}`}>
+                        <span className="g2-banner-dot" style={{ background: `var(--t-${tk}-ink)` }}></span>
                         {p.name}
+                        <i className="ti ti-chevron-down g2-collapse"></i>
                       </div>
+                      {tasks.map(t => (
+                        <div key={t.id} className="g2-task-name">
+                          <span className="g2-pid">{t.id}</span>
+                          <span className="g2-name">{t.n}</span>
+                          <span className="g2-hrs">{t.hours ? `${t.hours}h` : ''}</span>
+                        </div>
+                      ))}
                     </div>
-                    <div className="gantt-track-col">
-                      <div className="gantt-phase-row" style={{ background: `${tone.bg}55` }}>
-                        {[
-                          { d: p.surveyStart,   c: "var(--t-lime-ink)",  l: "問卷" },
-                          { d: p.campaignStart, c: "var(--t-peach-ink)", l: "開賣" },
-                          { d: p.campaignEnd,   c: "var(--t-rose-ink)",  l: "結束" },
-                        ].map((x, i) => {
-                          const dt = pD(x.d); if (!dt) return null;
-                          const off = dBt(mn, dt);
-                          return (
-                            <div key={i} className="gantt-milestone"
-                                 style={{ left: barLeft(off), borderLeftColor: x.c }}>
-                              <span className="gantt-milestone-label" style={{ color: x.c }}>{x.l}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
+                  ))}
+                </>
+              )}
+            </aside>
 
-                  {/* task rows */}
-                  {ts.map((t) => {
-                    const so = dBt(mn, new Date(t.start));
-                    const dur = Math.max(1, dBt(new Date(t.start), new Date(t.end)) + 1);
-                    const isPlaceholder = t.hours === 0;
-                    return (
-                      <div className="gantt-rowg" key={t.id}>
-                        <div className="gantt-namecol">
-                          <div className="gantt-task-name">
-                            <span style={{ fontSize: 9, color: "var(--ink-3)", marginRight: 8, minWidth: 26, fontVariantNumeric: "tabular-nums" }}>
-                              {t.id}
-                            </span>
-                            {t.n}
+            <div className="g2-track">
+              <div className="g2-date-header">
+                {monthLabels.map((ml, i) => (
+                  <span key={i} className="g2-month-band" style={{ left: ml.idx * COL_W + 12 }}>
+                    {ml.label}
+                  </span>
+                ))}
+                {gridDays.map((d, i) => {
+                  const isToday = todayVisible && i === todayOffset;
+                  return (
+                    <div key={i}
+                      className={`g2-date-cell${d.isWE ? ' weekend' : ''}${isToday ? ' today' : ''}`}
+                      style={{ width: COL_W }}>
+                      {isToday && <span className="g2-today-bubble">今天</span>}
+                      <span className="g2-day-num">{d.date.getDate()}</span>
+                      <span className="g2-day-name">{DAY_NAMES[d.dow]}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className={`g2-track-body${overlayMode ? ' g2-overlay' : ''}`}>
+
+                {todayVisible && (
+                  <div className="g2-today-line"
+                    style={{ left: todayOffset * COL_W + COL_W / 2 }} />
+                )}
+
+                {milestones.map((ms, i) => (
+                  <div key={i} className={`g2-milestone ${ms.tk}`}
+                    style={{ left: ms.off * COL_W + COL_W / 2 }}
+                    title={`${ms.pName}: ${ms.label}`} />
+                ))}
+
+                {overlayMode ? (
+                  overlayRows.map(({ id, bars }) => (
+                    <div key={id} className="g2-task-row">
+                      {gridDays.map((d, i) => (
+                        <div key={i} className={`g2-grid-cell${d.isWE ? ' weekend' : ''}`}
+                          style={{ width: COL_W }} />
+                      ))}
+                      {bars.map(({ p, t, tk }) =>
+                        barSegments(t.start, t.end, viewStart).map((seg, si) => (
+                          <div key={`${p.id}-${si}`}
+                            className={`g2-bar ${tk}${t.hours === 0 ? ' placeholder' : ''}`}
+                            style={{ left: seg.cs * COL_W + 2, width: seg.span * COL_W - 4 }}
+                            onMouseEnter={(e) => handleBarEnter(e, t, p)}
+                            onMouseLeave={handleBarLeave}>
+                            <span className="g2-bar-dot"></span>
+                            <span className="g2-bar-name">{p.name.split(' ')[0]}</span>
                           </div>
-                        </div>
-                        <div className="gantt-track-col">
-                          <div className="gantt-row">
-                            <div className={`gantt-bar ${isPlaceholder ? "dashed" : ""}`}
-                                 style={{
-                                   left: barLeft(so),
-                                   width: barWidth(dur),
-                                   background: tone.bg,
-                                 }}
-                                 onMouseEnter={(e) => handleBarEnter(e, t, p.name)}
-                                 onMouseLeave={handleBarLeave}
-                            />
-                          </div>
-                        </div>
+                        ))
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  normalGroups.map(({ p, tasks, tk }) => (
+                    <div key={p.id}>
+                      <div className={`g2-proj-row ${tk}`}>
+                        {gridDays.map((d, i) => (
+                          <div key={i} className={`g2-grid-cell${d.isWE ? ' weekend dim' : ''}`}
+                            style={{ width: COL_W }} />
+                        ))}
                       </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
+                      {tasks.map(t => (
+                        <div key={t.id} className="g2-task-row">
+                          {gridDays.map((d, i) => (
+                            <div key={i} className={`g2-grid-cell${d.isWE ? ' weekend' : ''}`}
+                              style={{ width: COL_W }} />
+                          ))}
+                          {barSegments(t.start, t.end, viewStart).map((seg, si) => (
+                            <div key={si}
+                              className={`g2-bar ${tk}${t.hours === 0 ? ' placeholder' : ''}`}
+                              style={{ left: seg.cs * COL_W + 2, width: seg.span * COL_W - 4 }}
+                              onMouseEnter={(e) => handleBarEnter(e, t, p)}
+                              onMouseLeave={handleBarLeave}>
+                              <span className="g2-bar-name">{si === 0 ? t.n : '續'}</span>
+                              {si === 0 && t.hours > 0 && (
+                                <span className="g2-bar-hrs">{t.hours}h</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="g2-footer">
+          <div className="g2-footer-left">
+            <span>
+              <i className="ti ti-info-circle"
+                style={{ fontSize: 13, verticalAlign: -2, marginRight: 4 }}></i>
+              共 {totalTasks} 個任務
+            </span>
+          </div>
+          <div>
+            <kbd>←</kbd> <kbd>→</kbd> 切換週　　<kbd>T</kbd> 回今天
           </div>
         </div>
       </div>
 
-      {/* custom tooltip */}
       {tip && (
-        <div className="gantt-tooltip" style={{ left: tip.x, top: tip.y }}>
-          <div className="gantt-tooltip-name">{tip.text}</div>
-          <div className="gantt-tooltip-sub">{tip.sub}</div>
-          <div className="gantt-tooltip-proj">{tip.proj}</div>
+        <div className="g2-tooltip" style={{ left: tip.x, top: tip.y }}>
+          <strong>{tip.task.n}</strong>
+          <span>{tip.project.name}</span>
+          <span>{fmt(tip.task.start)} – {fmt(tip.task.end)}</span>
+          {tip.task.hours > 0 && <span>{tip.task.hours}h</span>}
         </div>
       )}
     </div>
