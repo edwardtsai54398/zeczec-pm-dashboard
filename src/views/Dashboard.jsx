@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { dBt, fmt } from '../lib/dateUtils.js';
+import { useState, useMemo, useEffect } from 'react';
+import { dBt, fmt, fmtF } from '../lib/dateUtils.js';
 import { PH } from '../lib/tasks.js';
 import { getTone, WEEK, greetingFor } from './shared.js';
 
@@ -73,8 +73,8 @@ export function Dashboard({ projects, data, miles, onAddProject, onJump }) {
 
       <div className="dash-cards">
         {overdue.length > 0 && <OverdueCard tasks={overdue} today={today} />}
-        <TodoCard tasks={tdy.concat(soon).slice(0, 6)} today={today} />
-        <TimelineCard tasks={timelineTasks} today={today} days={timelineDays} />
+        <TodoCard tasks={tdy} today={today} />
+        <TimelineCard tasks={timelineTasks} today={today} />
         <MilestonesCard projects={projects} miles={miles} onJump={onJump} />
       </div>
     </div>
@@ -127,8 +127,19 @@ function MilestonesCard({ projects, miles, onJump }) {
   );
 }
 
-function TimelineCard({ tasks }) {
-  const [done, setDone] = useState({});
+function TimelineCard({ tasks, today }) {
+  const todayStr = fmtF(today);
+  const [done, setDone] = useState(() => loadDone(todayStr));
+
+  useEffect(() => { saveDone(done); }, [done]);
+
+  const toggle = (k, until) => setDone((d) => {
+    
+    const next = { ...d };
+    if (next[k]) delete next[k]; else next[k] = until;
+    return next;
+  });
+
   const upcomingTasks = tasks.filter((t) => t.startIdx > 0);
 
   return (
@@ -142,14 +153,14 @@ function TimelineCard({ tasks }) {
         {upcomingTasks.length === 0 && (
           <div className="todo-empty">未來 7 天沒有新任務</div>
         )}
-        {upcomingTasks.map((t, i) => {
+        {upcomingTasks.map((t) => {
           const tone = getTone(t._proj);
-          const k = t.id + "_tl_" + i;
+          const k = taskKey(t);
           const isDone = !!done[k];
           return (
             <div key={k} className="todo-row">
               <div className={`todo-check ${isDone ? "done" : ""}`}
-                   onClick={() => setDone((d) => ({ ...d, [k]: !d[k] }))}>
+                   onClick={() => toggle(k, taskUntil(t))}>
                 {isDone && <i className="ti ti-check" style={{ fontSize: 12 }}></i>}
               </div>
               <div className="todo-text">
@@ -169,8 +180,44 @@ function TimelineCard({ tasks }) {
   );
 }
 
+const TODO_DONE_KEY = "zeczec_todo_done";
+
+function taskKey(t) {
+  return (t._proj?.id || "") + "_" + t.id;
+}
+
+function taskUntil(t) {
+  return fmtF(t.end);
+}
+
+function loadDone(todayStr) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(TODO_DONE_KEY) || "{}");
+    const cleaned = {};
+    Object.entries(raw).forEach(([k, until]) => {
+      if (typeof until === "string" && until >= todayStr) cleaned[k] = until;
+    });
+    return cleaned;
+  } catch { return {}; }
+}
+
+function saveDone(done) {
+  localStorage.setItem(TODO_DONE_KEY, JSON.stringify(done));
+}
+
 function TodoCard({ tasks, today }) {
-  const [done, setDone] = useState({});
+  const todayStr = fmtF(today);
+
+  const [done, setDone] = useState(() => loadDone(todayStr));
+
+  useEffect(() => { saveDone(done); }, [done]);
+
+  const toggle = (k, until) => setDone((d) => {
+    const next = { ...d };
+    if (next[k]) delete next[k]; else next[k] = until;
+    return next;
+  });
+
   return (
     <div className="card">
       <div className="card-title">
@@ -180,14 +227,14 @@ function TodoCard({ tasks, today }) {
       <p className="card-sub">{today.getMonth() + 1}月{today.getDate()}日 · 週{WEEK[today.getDay()]}</p>
       <div className="todo-list">
         {tasks.length === 0 && <div className="todo-empty">今日空閒，可以喘口氣 ☕</div>}
-        {tasks.map((t, i) => {
+        {tasks.map((t) => {
           const tone = getTone(t._proj);
-          const k = t.id + "_" + i;
+          const k = taskKey(t);
           const isDone = !!done[k];
           return (
             <div key={k} className="todo-row">
               <div className={`todo-check ${isDone ? "done" : ""}`}
-                   onClick={() => setDone((d) => ({ ...d, [k]: !d[k] }))}>
+                   onClick={() => toggle(k, taskUntil(t))}>
                 {isDone && <i className="ti ti-check" style={{ fontSize: 12 }}></i>}
               </div>
               <div className="todo-text">
