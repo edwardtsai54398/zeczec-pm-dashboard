@@ -1,10 +1,10 @@
 import { useState, useMemo } from 'react';
-import { dBt, fmt, fmtF, addD } from '../lib/dateUtils.js';
+import { dBt, fmt, addD } from '../lib/dateUtils.js';
 import { PH } from '../lib/tasks.js';
 import { getTone, WEEK, greetingFor } from './shared.js';
 
 export function Dashboard({ projects, data, miles, onAddProject, onJump }) {
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
   const hr = new Date().getHours();
 
   const allTasks = useMemo(() => {
@@ -129,62 +129,40 @@ function MilestonesCard({ projects, miles, onJump }) {
   );
 }
 
-function TimelineCard({ tasks, projects, today, days }) {
-  const colWidth = 100 / days;
-  const dayLabels = Array.from({ length: days }, (_, i) => {
-    const d = addD(today, i);
-    return { idx: i, label: `${d.getMonth() + 1}/${d.getDate()}`, weekday: WEEK[d.getDay()], isToday: i === 0 };
-  });
-  const now = new Date();
-  const nowPct = ((now.getHours() * 60 + now.getMinutes()) / (24 * 60)) * colWidth;
+function TimelineCard({ tasks }) {
+  const [done, setDone] = useState({});
+  const upcomingTasks = tasks.filter((t) => t.startIdx > 0);
 
   return (
-    <div className="card tl-card">
+    <div className="card">
       <div className="card-title">
         <span>近七日活動</span>
         <button className="card-icon-btn" title="今天"><i className="ti ti-calendar"></i></button>
       </div>
-      <p className="card-sub">每個專案待辦任務的時間分布</p>
-
-      <div className="tl-axis">
-        {dayLabels.map((d) => (
-          <span key={d.idx} style={{
-            width: `${colWidth}%`, textAlign: "left",
-            color: d.isToday ? "var(--ink)" : undefined,
-            fontWeight: d.isToday ? 600 : 400,
-          }}>
-            {d.label} <span style={{ opacity: .55 }}>{d.weekday}</span>
-          </span>
-        ))}
-      </div>
-
-      <div className="tl-track-area">
-        <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-          <div className="tl-day-grid">{dayLabels.map((d) => <div key={d.idx} />)}</div>
-          <div className="tl-now" style={{ left: `${nowPct}%` }}></div>
-        </div>
-
-        {tasks.length === 0 && (
-          <div className="todo-empty" style={{ marginTop: 16 }}>未來 7 天沒有任務</div>
+      <p className="card-sub">未來 7 天即將開始的任務（不含今日）</p>
+      <div className="todo-list">
+        {upcomingTasks.length === 0 && (
+          <div className="todo-empty">未來 7 天沒有新任務</div>
         )}
-
-        {tasks.map((t, i) => {
+        {upcomingTasks.map((t, i) => {
           const tone = getTone(t._proj);
+          const k = t.id + "_tl_" + i;
+          const isDone = !!done[k];
           return (
-            <div key={t.id + "_" + i} className="tl-row">
-              <div className="tl-bar"
-                style={{
-                  left: `${t.startIdx * colWidth}%`,
-                  width: `calc(${(t.endIdx - t.startIdx + 1) * colWidth}% - 4px)`,
-                  marginLeft: 2,
-                  background: tone.bg,
-                  color: tone.ink,
-                }}
-                title={`${t.n} · ${fmt(t.start)}-${fmt(t.end)}`}
-              >
-                <span className="bar-label">{t.n}</span>
-                <span className="bar-proj">· {t._proj.name}</span>
+            <div key={k} className="todo-row">
+              <div className={`todo-check ${isDone ? "done" : ""}`}
+                   onClick={() => setDone((d) => ({ ...d, [k]: !d[k] }))}>
+                {isDone && <i className="ti ti-check" style={{ fontSize: 12 }}></i>}
               </div>
+              <div className="todo-text">
+                <div className={`todo-name ${isDone ? "done" : ""}`}>{t.n}</div>
+                <div className="todo-meta">
+                  {t._proj.name} · {fmt(t.start)}–{fmt(t.end)}{t.hours > 0 ? ` · ${t.hours}hr` : ""}
+                </div>
+              </div>
+              <span className="todo-tag" style={{ background: tone.bg, color: tone.ink }}>
+                {(PH[t.p] || {}).n || "—"}
+              </span>
             </div>
           );
         })}
