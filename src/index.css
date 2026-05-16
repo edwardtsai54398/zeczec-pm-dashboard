@@ -743,10 +743,17 @@ textarea.text-in { resize: vertical; min-height: 64px; }
 .g2-filter-spacer { flex: 1; }
 .g2-filter-count { font-size: 12px; color: var(--ink-3); padding: 0 6px; }
 
+/* gantt page wrapper */
+.g2-page {
+  display: flex; flex-direction: column;
+  height: calc(100vh - 54px);
+}
+
 /* gantt card */
 .g2-card {
   background: white; border-radius: var(--r-lg);
   box-shadow: var(--shadow); overflow: hidden;
+  flex: 1; display: flex; flex-direction: column; min-height: 0;
 }
 
 /* toolbar */
@@ -839,7 +846,7 @@ textarea.text-in { resize: vertical; min-height: 64px; }
 .g2-icon-sq:hover { background: var(--bg-warm); color: var(--ink); }
 
 /* scroll + grid */
-.g2-scroll { overflow-x: auto; overflow-y: visible; }
+.g2-scroll { flex: 1; overflow: auto; min-height: 0; }
 .g2-grid { display: grid; grid-template-columns: 240px 1fr; }
 
 /* task column */
@@ -854,6 +861,7 @@ textarea.text-in { resize: vertical; min-height: 64px; }
   border-bottom: 1px solid var(--border);
   font-size: 10px; font-weight: 700;
   letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3);
+  position: sticky; top: 0; z-index: 5; background: white;
 }
 .g2-proj-banner {
   height: 40px; padding: 0 14px 0 18px;
@@ -893,9 +901,11 @@ textarea.text-in { resize: vertical; min-height: 64px; }
 /* track */
 .g2-track { position: relative; }
 .g2-date-header {
-  height: 68px; position: relative;
+  height: 68px;
+  position: sticky; top: 0; z-index: 3;
   border-bottom: 1px solid var(--border);
   display: flex; padding-top: 18px;
+  background: white;
 }
 .g2-month-band {
   position: absolute; top: 6px; left: 12px;
@@ -981,6 +991,8 @@ textarea.text-in { resize: vertical; min-height: 64px; }
 
 /* bars — overlay mode: semi-transparent + multiply */
 .g2-overlay .g2-bar { mix-blend-mode: multiply; font-weight: 600; }
+/* split bars (2+ projects in same row): solid, no blend, no text */
+.g2-overlay .g2-bar.split { mix-blend-mode: normal; opacity: .92; border-radius: 4px; }
 .g2-overlay .g2-bar.lavender { background: rgba(221,218,244,.78); box-shadow: inset 0 0 0 1.5px #8B85D6; }
 .g2-overlay .g2-bar.lime     { background: rgba(227,237,161,.72); box-shadow: inset 0 0 0 1.5px #B8C95C; }
 .g2-overlay .g2-bar.peach    { background: rgba(245,210,181,.72); box-shadow: inset 0 0 0 1.5px #E29A6A; }

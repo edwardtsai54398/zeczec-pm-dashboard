@@ -275,16 +275,7 @@ export function Gantt({ projects, data }) {
   }
 
   return (
-    <div>
-      <section className="g2-page-head">
-        <div>
-          <h1 className="g2-title">
-            {projects.length}個專案<em>，</em>同時推進。
-          </h1>
-          <p className="g2-sub">勾選想看的專案，時間軸自動疊加比對</p>
-        </div>
-      </section>
-
+    <div className="g2-page">
       <div className="g2-filter-row">
         <span className="g2-filter-label">專案</span>
         {projects.map(p => {
@@ -448,33 +439,53 @@ export function Gantt({ projects, data }) {
                 ))}
 
                 {overlayMode ? (
-                  overlayRows.map(({ id, bars }) => (
-                    <div key={id} className="g2-task-row">
-                      {gridDays.map((d, i) => (
-                        <div key={i} className={`g2-grid-cell${d.isWE ? ' weekend' : ''}`}
-                          style={{ width: COL_W }} />
-                      ))}
-                      {bars.map(({ p, t, tk }) => (
-                        <div key={p.id}>
-                          {barSegments(t.start, t.end, viewStart).map((seg, si) => (
-                            <div key={`${p.id}-${si}`}
-                              className={`g2-bar ${tk}${t.hours === 0 ? ' placeholder' : ''}`}
-                              style={{ left: seg.cs * COL_W + 2, width: seg.span * COL_W - 4 }}
-                              onMouseEnter={(e) => handleBarEnter(e, t, p)}
-                              onMouseLeave={handleBarLeave}>
-                              <span className="g2-bar-dot"></span>
-                              <span className="g2-bar-name">{p.name.split(' ')[0]}</span>
+                  overlayRows.map(({ id, bars }) => {
+                    const hasTimeOverlap = bars.length >= 2 && bars.some((a, ai) =>
+                      bars.some((b, bi) => {
+                        if (bi <= ai) return false;
+                        return new Date(a.t.start) <= new Date(b.t.end) &&
+                               new Date(b.t.start) <= new Date(a.t.end);
+                      })
+                    );
+                    const isMulti = hasTimeOverlap;
+                    const N = bars.length;
+                    const PAD = 4, GAP = 2;
+                    const barH = isMulti ? Math.floor((40 - PAD * 2 - GAP * (N - 1)) / N) : undefined;
+                    return (
+                      <div key={id} className="g2-task-row">
+                        {gridDays.map((d, i) => (
+                          <div key={i} className={`g2-grid-cell${d.isWE ? ' weekend' : ''}`}
+                            style={{ width: COL_W }} />
+                        ))}
+                        {bars.map(({ p, t, tk }, barIdx) => {
+                          const barTop = isMulti ? PAD + barIdx * (barH + GAP) : undefined;
+                          return (
+                            <div key={p.id}>
+                              {barSegments(t.start, t.end, viewStart).map((seg, si) => (
+                                <div key={`${p.id}-${si}`}
+                                  className={`g2-bar ${tk}${t.hours === 0 ? ' placeholder' : ''}${isMulti ? ' split' : ''}`}
+                                  style={{
+                                    left: seg.cs * COL_W + 2,
+                                    width: seg.span * COL_W - 4,
+                                    ...(isMulti ? { top: barTop, height: barH, bottom: 'auto' } : {}),
+                                  }}
+                                  onMouseEnter={(e) => handleBarEnter(e, t, p)}
+                                  onMouseLeave={handleBarLeave}>
+                                  {!isMulti && <span className="g2-bar-dot"></span>}
+                                  {!isMulti && <span className="g2-bar-name">{si === 0 ? t.n : '續'}</span>}
+                                </div>
+                              ))}
+                              {!isMulti && t.waitEnd && barSegments(addD(t.end, 1), t.waitEnd, viewStart).map((seg, si) => (
+                                <div key={`w${p.id}-${si}`}
+                                  className="g2-bar-wait"
+                                  style={{ left: seg.cs * COL_W + 2, width: seg.span * COL_W - 4 }} />
+                              ))}
                             </div>
-                          ))}
-                          {t.waitEnd && barSegments(addD(t.end, 1), t.waitEnd, viewStart).map((seg, si) => (
-                            <div key={`w${p.id}-${si}`}
-                              className="g2-bar-wait"
-                              style={{ left: seg.cs * COL_W + 2, width: seg.span * COL_W - 4 }} />
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  ))
+                          );
+                        })}
+                      </div>
+                    );
+                  })
                 ) : (
                   normalGroups.map(({ p, tasks, tk }) => (
                     <div key={p.id}>
