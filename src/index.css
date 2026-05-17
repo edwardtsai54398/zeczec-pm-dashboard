@@ -468,6 +468,18 @@ button { cursor: pointer; }
 }
 .todo-name.done { text-decoration: line-through; color: var(--ink-3); }
 .todo-meta { font-size: 11px; color: var(--ink-3); margin-top: 2px; }
+.todo-days-left {
+  font-size: 11px; font-weight: 500;
+  color: var(--ink-3);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.todo-days-left.urgent {
+  color: #D94F38;
+  background: #FDECEA;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
 .todo-tag {
   font-size: 10px; padding: 3px 9px;
   border-radius: 999px;

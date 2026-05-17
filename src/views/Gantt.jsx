@@ -335,7 +335,7 @@ export function Gantt({ projects, data }) {
                 <span className="g2-swatch tl"></span>今天
               </div>
               <div className="g2-legend-item">
-                <span className="g2-swatch ms"></span>里程碑
+                <span className="g2-swatch ms"></span>
               </div>
             </div>
 

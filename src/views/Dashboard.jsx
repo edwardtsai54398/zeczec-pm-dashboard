@@ -23,6 +23,7 @@ export function Dashboard({ projects, data, miles, onAddProject, onJump }) {
     else if (a <= today && b >= today) tdy.push(t);
     else if (a > today && dBt(today, a) <= 7) soon.push(t);
   });
+  tdy.sort((a, b) => new Date(a.end) - new Date(b.end));
   soon.sort((a, b) => new Date(a.start) - new Date(b.start));
 
   const weekTasks = allTasks.filter((t) => {
@@ -231,6 +232,9 @@ function TodoCard({ tasks, today }) {
           const tone = getTone(t._proj);
           const k = taskKey(t);
           const isDone = !!done[k];
+          const endDate = new Date(t.end); endDate.setHours(0, 0, 0, 0);
+          const daysLeft = dBt(today, endDate);
+          const urgent = daysLeft <= 3;
           return (
             <div key={k} className="todo-row">
               <div className={`todo-check ${isDone ? "done" : ""}`}
@@ -243,6 +247,9 @@ function TodoCard({ tasks, today }) {
                   {t._proj.name} · {fmt(t.start)}–{fmt(t.end)}{t.hours > 0 ? ` · ${t.hours}hr` : ""}
                 </div>
               </div>
+              <span className={`todo-days-left${urgent ? " urgent" : ""}`}>
+                剩 {daysLeft} 天
+              </span>
               <span className="todo-tag" style={{ background: tone.bg, color: tone.ink }}>
                 {(PH[t.p] || {}).n || "—"}
               </span>

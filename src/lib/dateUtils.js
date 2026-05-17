@@ -59,3 +59,14 @@ export const sWD = (e, n, bl) => {
   }
   return c;
 };
+
+// Count working hours between from (inclusive) and to (exclusive)
+export const wdH = (from, to, bl, hpd) => {
+  let c = new Date(from), cnt = 0;
+  const t = new Date(to);
+  while (c < t) {
+    if (!isWE(c) && !isBO(c, bl)) cnt += hpd;
+    c = addD(c, 1);
+  }
+  return cnt;
+};

@@ -186,8 +186,13 @@ Brief(4.5) → 腳本過稿(+5d)(4.6) → 影片過稿(+5d)(4.7) → B copy(4.8)
 
 - [] 所有專案共用同一個 dailyLoad 容量池
 - [] 每日上限 = hoursPerDay（預設 8），跨案件任務合計不超過此上限
-- [] 排程優先順序：啟動日較早的專案先排
+- [] 排程優先順序：所有專案的任務混入**全域任務池**，每次從「dependencies 已完成且 startDate 已到」的任務中，挑出優先度最高的排入
+  - 主要排序鍵：專案啟動日越早 → 優先度越高
+  - 次要排序鍵：關鍵路徑剩餘工時越長 → 優先度越高（長鏈任務不被短鏈擠佔）
+  - 效果：後加入的專案只要啟動日合理，即可從自己的 startDate 起與其他專案公平競爭當日產能，不再因陣列順序而整體延後
 - [] 週末與不可用時段（如出國、員工旅遊）自動跳過
+
+> **未來升級方案 C（優先權動態調整）**：當有需求在「任務完成後即時更新後繼任務優先度」時，可將目前的 `schedulePool` while 迴圈（O(n²) 線性掃描）替換成 min-heap 驅動的事件模擬器（O(n log n)）。heap 的比較鍵與現行 `calcPriority` 公式相同，只是從「每輪重排」改為「任務完成時 push 後繼」。`isReady`、`calcPriority`、`allocateTask`、`reshapeResult` 四個純函式均不需修改。
 
 ---
 
@@ -342,12 +347,17 @@ Brief(4.5) → 腳本過稿(+5d)(4.6) → 影片過稿(+5d)(4.7) → B copy(4.8)
 
 ### 9.2 排程引擎實作要點
 
-- [] 拓撲排序（Topological Sort）解決任務依賴
-- [] 貪婪排程：依排序後順序，每個任務找最早可開始日
-- [] 容量控制：每日累計工時不超過 hoursPerDay，跨所有專案
-- [] 等待天數：任務完成後 +N 個工作天才觸發下一個依賴
-- [] 反推模式：先估算總工時+等待天數，從目標日期往前扣除
-- [] 安全迴圈上限：while 迴圈加 safety counter（建議 500）防無限迴圈
+- [] 拓撲排序（Topological Sort）解決任務依賴（per-project DFS，depKeys 以 `${pid}::${id}` 命名空間隔離跨案件）
+- [] 全域任務池排程（Global Task Pool Scheduling）：
+  - 所有專案任務展平成單一 PoolEntry 陣列
+  - 主迴圈：每輪從「ready（前置完成 + startDate 已到）」任務中以 `calcPriority` 排序，取優先度最高者呼叫 `allocateTask`
+  - `calcPriority = projStart.getTime() × 1e⁻⁶ − remainH`（啟動日為主鍵，關鍵路徑長度為次鍵）
+  - 取代舊的「逐專案串行排程」，讓晚啟動的案件從自己的 startDate 起與其他案件公平競爭
+- [] 容量控制：每日累計工時不超過 hoursPerDay，跨所有專案共用同一 load map
+- [] 等待天數：任務完成後 +N 個工作天才觸發下一個依賴（waitEnd = aWD(tE, w, bl)）
+- [] 反推模式：先估算總工時 + 等待天數，從目標日期往前扣除
+- [] 安全迴圈上限：while 迴圈加 safety counter 防無限迴圈（任務池：`pool.length² + 10`；單任務分配：500）
+- [] **未來升級方案 C**：將 `schedulePool` 的 while 迴圈替換為 min-heap 事件模擬器，支援任務完成後即時動態調整後繼優先度；其餘四個純函式（`isReady`、`calcPriority`、`allocateTask`、`reshapeResult`）介面不變
 
 ### 9.3 注意事項
 
