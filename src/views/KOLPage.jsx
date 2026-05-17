@@ -27,7 +27,7 @@ export function KOLPage({ projects, onUpdate }) {
     onUpdate({
       ...p,
       kols: [...kols, {
-        id: `k${Date.now()}`,
+        id: `k${crypto.randomUUID()}`,
         name: newKol.name,
         wave: newKol.wave,
         milestones: KOL_MILESTONES.map((m) => ({ id: m.id, name: m.n, date: "" })),

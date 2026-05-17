@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { dBt, fmt, fmtF } from '../lib/dateUtils.js';
+import { dBt, fmt, fmtF, pD } from '../lib/dateUtils.js';
 import { PH } from '../lib/tasks.js';
 import { getTone, WEEK, greetingFor } from './shared.js';
 
@@ -15,12 +15,42 @@ export function Dashboard({ projects, data, miles, onAddProject, onJump }) {
     return out;
   }, [projects, data]);
 
+  const kolTasks = useMemo(() => {
+    const out = [];
+    projects.forEach((p) => {
+      (p.kols || []).forEach((k) => {
+        k.milestones.forEach((ms) => {
+          if (!ms.date) return;
+          const d = pD(ms.date);
+          if (!d) return;
+          out.push({
+            id: `kol_${k.id}_${ms.id}`,
+            n: `${ms.name}-${k.name}`,
+            start: d,
+            end: d,
+            hours: 0,
+            p: "4",
+            _proj: p,
+            _isKol: true,
+          });
+        });
+      });
+    });
+    return out;
+  }, [projects]);
+
   const tdy = [], soon = [], overdue = [];
   allTasks.forEach((t) => {
     const a = new Date(t.start), b = new Date(t.end);
     a.setHours(0, 0, 0, 0); b.setHours(0, 0, 0, 0);
     if (b < today) overdue.push(t);
     else if (a <= today && b >= today) tdy.push(t);
+    else if (a > today && dBt(today, a) <= 7) soon.push(t);
+  });
+  kolTasks.forEach((t) => {
+    const a = new Date(t.start), b = new Date(t.end);
+    a.setHours(0, 0, 0, 0); b.setHours(0, 0, 0, 0);
+    if (a <= today && b >= today) tdy.push(t);
     else if (a > today && dBt(today, a) <= 7) soon.push(t);
   });
   tdy.sort((a, b) => new Date(a.end) - new Date(b.end));
@@ -36,7 +66,7 @@ export function Dashboard({ projects, data, miles, onAddProject, onJump }) {
   const timelineDays = 7;
   const timelineTasks = useMemo(() => {
     const items = [];
-    allTasks.forEach((t) => {
+    [...allTasks, ...kolTasks].forEach((t) => {
       const s = new Date(t.start), e = new Date(t.end);
       s.setHours(0, 0, 0, 0); e.setHours(0, 0, 0, 0);
       const so = dBt(today, s), eo = dBt(today, e);
@@ -44,7 +74,7 @@ export function Dashboard({ projects, data, miles, onAddProject, onJump }) {
       items.push({ ...t, startIdx: Math.max(0, so), endIdx: Math.min(timelineDays - 1, eo) });
     });
     return items.sort((a, b) => a.startIdx - b.startIdx);
-  }, [allTasks, today]);
+  }, [allTasks, kolTasks, today]);
 
   return (
     <div>
@@ -73,8 +103,8 @@ export function Dashboard({ projects, data, miles, onAddProject, onJump }) {
       </section>
 
       <div className="dash-cards">
-        {overdue.length > 0 && <OverdueCard tasks={overdue} today={today} />}
         <TodoCard tasks={tdy} today={today} />
+        {overdue.length > 0 && <OverdueCard tasks={overdue} today={today} />}
         <TimelineCard tasks={timelineTasks} today={today} />
         <MilestonesCard projects={projects} miles={miles} onJump={onJump} />
       </div>
@@ -261,20 +291,45 @@ function TodoCard({ tasks, today }) {
   );
 }
 
+const OVERDUE_DONE_KEY = "zeczec_overdue_done";
+
+function loadOverdueDone() {
+  try { return JSON.parse(localStorage.getItem(OVERDUE_DONE_KEY) || "{}"); }
+  catch { return {}; }
+}
+
 function OverdueCard({ tasks, today }) {
+  const [dismissed, setDismissed] = useState(() => loadOverdueDone());
+  const [expanded, setExpanded] = useState(false);
+
+  const dismiss = (k) => setDismissed((d) => {
+    const next = { ...d, [k]: true };
+    localStorage.setItem(OVERDUE_DONE_KEY, JSON.stringify(next));
+    return next;
+  });
+
+  const visible = tasks.filter((t) => !dismissed[taskKey(t)]);
+
+  if (visible.length === 0) return null;
+
+  const shown = expanded ? visible : visible.slice(0, 5);
+  const remaining = visible.length - 5;
+
   return (
     <div className="card overdue-card">
       <div className="card-title">
         <span>過期未完成</span>
-        <span className="overdue-badge">{tasks.length}</span>
+        <span className="overdue-badge">{visible.length}</span>
       </div>
       <p className="card-sub">已超過結束日期但尚未完成的任務</p>
       <div className="todo-list">
-        {tasks.slice(0, 5).map((t, i) => {
+        {shown.map((t) => {
           const tone = getTone(t._proj);
           const daysLate = dBt(new Date(t.end), today);
+          const k = taskKey(t);
           return (
-            <div key={t.id + "_" + i} className="todo-row">
+            <div key={k} className="todo-row">
+              <div className="todo-check" onClick={() => dismiss(k)}></div>
               <div className="todo-text">
                 <div className="todo-name">{t.n}</div>
                 <div className="todo-meta">
@@ -287,9 +342,14 @@ function OverdueCard({ tasks, today }) {
             </div>
           );
         })}
-        {tasks.length > 5 && (
-          <div className="todo-meta" style={{ textAlign: "center", marginTop: 8 }}>
-            還有 {tasks.length - 5} 項...
+        {!expanded && remaining > 0 && (
+          <div className="todo-show-more" onClick={() => setExpanded(true)}>
+            還有 {remaining} 項...
+          </div>
+        )}
+        {expanded && visible.length > 5 && (
+          <div className="todo-show-more" onClick={() => setExpanded(false)}>
+            收起
           </div>
         )}
       </div>
