@@ -1,48 +1,95 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { dBt, addD, fmt, pD } from '../lib/dateUtils.js';
 import { TONES } from './shared.js';
+import { BT } from '../lib/tasks.js';
 
-function PinPopover({ state, projects, data, onSave, onClose }) {
+function TaskEditModal({ state, projects, data, onSave, onClose }) {
   const proj = projects.find((p) => p.id === state.pid);
   const projTask = (proj?.tasks || []).find((t) => t.id === state.taskId);
   const scheduled = data[state.pid]?.[state.taskId];
+  const btTask = BT.find((b) => b.id === state.taskId);
+  const isPM = proj?.template === 'pm';
+  const defaultHours = isPM ? (btTask?.pm ?? 0) : (btTask?.h ?? 0);
+  const defaultWait = btTask?.w ?? 0;
 
-  const [enabled, setEnabled] = useState(!!projTask?.pinnedStart);
-  const [dateVal, setDateVal] = useState(projTask?.pinnedStart || '');
+  const [hoursVal, setHoursVal] = useState(
+    projTask?.pinnedHours != null ? String(projTask.pinnedHours) : ''
+  );
+  const [waitVal, setWaitVal] = useState(
+    projTask?.pinnedWait != null ? String(projTask.pinnedWait) : ''
+  );
+  const [pinEnabled, setPinEnabled] = useState(!!projTask?.pinnedStart);
+  const [pinDate, setPinDate] = useState(projTask?.pinnedStart || '');
 
-  const pinDate = enabled && dateVal ? pD(dateVal) : null;
-  const isOverridden = pinDate && scheduled?.start && new Date(scheduled.start) > pinDate;
+  const effectiveStart = scheduled?.start ? new Date(scheduled.start) : null;
+  const pinD = pinEnabled && pinDate ? pD(pinDate) : null;
+  const isPinOverridden = pinD && effectiveStart && effectiveStart > pinD;
 
-  useEffect(() => {
-    const close = (e) => { if (!e.target.closest('.g2-pin-pop')) onClose(); };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, [onClose]);
+  const handleSave = () => {
+    onSave(state.pid, state.taskId, {
+      pinnedStart: pinEnabled && pinDate ? pinDate : null,
+      pinnedHours: hoursVal !== '' ? Number(hoursVal) : null,
+      pinnedWait:  waitVal  !== '' ? Number(waitVal)  : null,
+    });
+    onClose();
+  };
 
   return (
-    <div className="g2-pin-pop" style={{ left: state.x, top: state.y }}>
-      <div className="g2-pin-pop-title">{scheduled?.n}</div>
-      <div className="g2-pin-pop-sub">{fmt(scheduled?.start)} – {fmt(scheduled?.end)}</div>
-      <label className="g2-pin-row">
-        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-        <span>固定日期</span>
-        {enabled && (
-          <input type="date" className="g2-pin-date" value={dateVal}
-            onChange={(e) => setDateVal(e.target.value)} />
-        )}
-      </label>
-      {isOverridden && (
-        <div className="g2-pin-warn">
-          <i className="ti ti-alert-triangle"></i>
-          依賴項目較晚結束，釘選日已被自動延後
+    <div className="g2-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="g2-modal">
+        <div className="g2-modal-header">
+          <div className="g2-modal-title">{scheduled?.n}</div>
+          <div className="g2-modal-sub">{fmt(scheduled?.start)} – {fmt(scheduled?.end)}</div>
         </div>
-      )}
-      <div className="g2-pin-actions">
-        <button className="g2-pin-btn" onClick={onClose}>取消</button>
-        <button className="g2-pin-btn primary" onClick={() => {
-          onSave(state.pid, state.taskId, enabled ? dateVal : null);
-          onClose();
-        }}>儲存並重算</button>
+
+        <div className="g2-modal-info">
+          <span><span className="g2-modal-info-label">預設工時</span>{defaultHours}h</span>
+          <span><span className="g2-modal-info-label">預設等待天數</span>{defaultWait} 天</span>
+        </div>
+
+        <div className="g2-modal-body">
+          <div className="g2-modal-field">
+            <label className="g2-modal-label">新的工時（小時）</label>
+            <input
+              type="number" min="0" step="0.5"
+              className="g2-modal-input"
+              placeholder={`預設 ${defaultHours}h`}
+              value={hoursVal}
+              onChange={(e) => setHoursVal(e.target.value)}
+            />
+          </div>
+          <div className="g2-modal-field">
+            <label className="g2-modal-label">新的等待天數（工作天）</label>
+            <input
+              type="number" min="0" step="1"
+              className="g2-modal-input"
+              placeholder={`預設 ${defaultWait} 天`}
+              value={waitVal}
+              onChange={(e) => setWaitVal(e.target.value)}
+            />
+          </div>
+          <div className="g2-modal-field">
+            <label className="g2-pin-row" style={{ margin: 0 }}>
+              <input type="checkbox" checked={pinEnabled} onChange={(e) => setPinEnabled(e.target.checked)} />
+              <span className="g2-modal-label" style={{ margin: 0 }}>固定開始日期</span>
+              {pinEnabled && (
+                <input type="date" className="g2-pin-date" style={{ marginLeft: 'auto' }}
+                  value={pinDate} onChange={(e) => setPinDate(e.target.value)} />
+              )}
+            </label>
+            {isPinOverridden && (
+              <div className="g2-pin-warn" style={{ marginTop: 6 }}>
+                <i className="ti ti-alert-triangle"></i>
+                依賴項目較晚結束，釘選日已被自動延後
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="g2-modal-footer">
+          <button className="g2-pin-btn" onClick={onClose}>取消</button>
+          <button className="g2-pin-btn primary" onClick={handleSave}>儲存並重算</button>
+        </div>
       </div>
     </div>
   );
@@ -260,11 +307,10 @@ export function Gantt({ projects, data, onPinUpdate }) {
   }, []);
   const handleBarLeave = useCallback(() => setTip(null), []);
 
-  const handleBarClick = useCallback((e, t, p) => {
+  const handleBarDblClick = useCallback((e, t, p) => {
     e.stopPropagation();
     setTip(null);
-    const rect = e.currentTarget.getBoundingClientRect();
-    setPinState({ pid: p.id, taskId: t.id, x: rect.left, y: rect.bottom + 6 });
+    setPinState({ pid: p.id, taskId: t.id });
   }, []);
 
   const normalGroups = useMemo(() => {
@@ -525,7 +571,7 @@ export function Gantt({ projects, data, onPinUpdate }) {
                                   }}
                                   onMouseEnter={(e) => handleBarEnter(e, t, p)}
                                   onMouseLeave={handleBarLeave}
-                                  onClick={(e) => handleBarClick(e, t, p)}>
+                                  onDoubleClick={(e) => handleBarDblClick(e, t, p)}>
                                   {!isMulti && <span className="g2-bar-dot"></span>}
                                   {!isMulti && <span className="g2-bar-name">{si === 0 ? t.n : '續'}</span>}
                                 </div>
@@ -567,7 +613,7 @@ export function Gantt({ projects, data, onPinUpdate }) {
                                 style={{ left: seg.cs * COL_W + 2, width: seg.span * COL_W - 4 }}
                                 onMouseEnter={(e) => handleBarEnter(e, t, p)}
                                 onMouseLeave={handleBarLeave}
-                                onClick={(e) => handleBarClick(e, t, p)}>
+                                onDoubleClick={(e) => handleBarDblClick(e, t, p)}>
                                 <span className="g2-bar-name">{si === 0 ? t.n : '續'}</span>
                                 {si === 0 && t.hours > 0 && (
                                   <span className="g2-bar-hrs">{t.hours}h</span>
@@ -619,7 +665,7 @@ export function Gantt({ projects, data, onPinUpdate }) {
       )}
 
       {pinState && (
-        <PinPopover
+        <TaskEditModal
           state={pinState}
           projects={projects}
           data={data}

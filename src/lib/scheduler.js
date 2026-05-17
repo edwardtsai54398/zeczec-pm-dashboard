@@ -49,13 +49,14 @@ function buildGlobalPool(projects, settings) {
 
     for (const id of Object.keys(tm)) {
       const task = tm[id];
+      const projTaskData = (proj.tasks || []).find((pt) => pt.id === id);
       pool.push({
         key:      `${proj.id}::${id}`,
         id,
         pid:      proj.id,
         pn:       proj.name,
-        hours:    task.hours,
-        w:        task.w || 0,
+        hours:    projTaskData?.pinnedHours != null ? projTaskData.pinnedHours : task.hours,
+        w:        projTaskData?.pinnedWait  != null ? projTaskData.pinnedWait  : (task.w || 0),
         dl:       task.dl,
         tm:       task.tm,
         sp:       task.sp || 0,
@@ -64,7 +65,7 @@ function buildGlobalPool(projects, settings) {
         projStart: start,
         svS, svE, cpS, cpE,
         _task:    task,
-        pinnedStart: (proj.tasks || []).find((pt) => pt.id === id)?.pinnedStart || null,
+        pinnedStart: projTaskData?.pinnedStart || null,
       });
     }
   }
@@ -174,7 +175,7 @@ function allocateTask(entry, scheduled, gl, al, settings) {
   }
 
   const waitEnd = entry.w > 0 ? aWD(tE, entry.w, bl) : null;
-  return { ...entry._task, start: tS, end: tE, waitEnd, pid: entry.pid, pn: entry.pn, effH: hrs };
+  return { ...entry._task, hours: entry.hours, w: entry.w, start: tS, end: tE, waitEnd, pid: entry.pid, pn: entry.pn, effH: hrs };
 }
 
 // Solution C: replace only this function with a min-heap driver.

@@ -33,16 +33,19 @@ export default function App() {
   const updateProject = (updated) =>
     setProjects((v) => v.map((p) => p.id === updated.id ? updated : p));
 
-  const updateTaskPin = useCallback((pid, taskId, pinnedStart) => {
+  const updateTaskPin = useCallback((pid, taskId, { pinnedStart, pinnedHours, pinnedWait }) => {
     setProjects((v) => v.map((p) => {
       if (p.id !== pid) return p;
       return {
         ...p,
-        tasks: p.tasks.map((t) =>
-          t.id === taskId
-            ? { ...t, pinnedStart: pinnedStart || undefined }
-            : t
-        ),
+        tasks: p.tasks.map((t) => {
+          if (t.id !== taskId) return t;
+          const next = { ...t };
+          if (pinnedStart) next.pinnedStart = pinnedStart; else delete next.pinnedStart;
+          if (pinnedHours != null) next.pinnedHours = pinnedHours; else delete next.pinnedHours;
+          if (pinnedWait != null) next.pinnedWait = pinnedWait; else delete next.pinnedWait;
+          return next;
+        }),
       };
     }));
   }, []);
