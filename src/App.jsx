@@ -33,6 +33,20 @@ export default function App() {
   const updateProject = (updated) =>
     setProjects((v) => v.map((p) => p.id === updated.id ? updated : p));
 
+  const updateTaskPin = useCallback((pid, taskId, pinnedStart) => {
+    setProjects((v) => v.map((p) => {
+      if (p.id !== pid) return p;
+      return {
+        ...p,
+        tasks: p.tasks.map((t) =>
+          t.id === taskId
+            ? { ...t, pinnedStart: pinnedStart || undefined }
+            : t
+        ),
+      };
+    }));
+  }, []);
+
   const addProject = () => {
     const id = `p${Date.now()}`;
     const tone = TONE_PALETTE[projects.length % TONE_PALETTE.length];
@@ -74,7 +88,7 @@ export default function App() {
             onAddProject={addProject} onJump={() => setView("gantt")}
           />
         )}
-        {view === "gantt" && <Gantt projects={projects} data={sch} />}
+        {view === "gantt" && <Gantt projects={projects} data={sch} onPinUpdate={updateTaskPin} />}
         {view === "project" && (
           <ProjectPage
             projects={projects} sel={sel} setSel={setSel}

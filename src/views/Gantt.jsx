@@ -2,6 +2,52 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { dBt, addD, fmt, pD } from '../lib/dateUtils.js';
 import { TONES } from './shared.js';
 
+function PinPopover({ state, projects, data, onSave, onClose }) {
+  const proj = projects.find((p) => p.id === state.pid);
+  const projTask = (proj?.tasks || []).find((t) => t.id === state.taskId);
+  const scheduled = data[state.pid]?.[state.taskId];
+
+  const [enabled, setEnabled] = useState(!!projTask?.pinnedStart);
+  const [dateVal, setDateVal] = useState(projTask?.pinnedStart || '');
+
+  const pinDate = enabled && dateVal ? pD(dateVal) : null;
+  const isOverridden = pinDate && scheduled?.start && new Date(scheduled.start) > pinDate;
+
+  useEffect(() => {
+    const close = (e) => { if (!e.target.closest('.g2-pin-pop')) onClose(); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [onClose]);
+
+  return (
+    <div className="g2-pin-pop" style={{ left: state.x, top: state.y }}>
+      <div className="g2-pin-pop-title">{scheduled?.n}</div>
+      <div className="g2-pin-pop-sub">{fmt(scheduled?.start)} – {fmt(scheduled?.end)}</div>
+      <label className="g2-pin-row">
+        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+        <span>固定日期</span>
+        {enabled && (
+          <input type="date" className="g2-pin-date" value={dateVal}
+            onChange={(e) => setDateVal(e.target.value)} />
+        )}
+      </label>
+      {isOverridden && (
+        <div className="g2-pin-warn">
+          <i className="ti ti-alert-triangle"></i>
+          依賴項目較晚結束，釘選日已被自動延後
+        </div>
+      )}
+      <div className="g2-pin-actions">
+        <button className="g2-pin-btn" onClick={onClose}>取消</button>
+        <button className="g2-pin-btn primary" onClick={() => {
+          onSave(state.pid, state.taskId, enabled ? dateVal : null);
+          onClose();
+        }}>儲存並重算</button>
+      </div>
+    </div>
+  );
+}
+
 const LABEL_W = 240;
 const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const MONTH_EN = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
@@ -65,7 +111,7 @@ function barSegments(startD, endD, gridStart) {
   return segments;
 }
 
-export function Gantt({ projects, data }) {
+export function Gantt({ projects, data, onPinUpdate }) {
   const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
 
   const [zoomIdx, setZoomIdx] = useState(1);
@@ -106,6 +152,7 @@ export function Gantt({ projects, data }) {
   const [overlayMode, setOverlayMode] = useState(false);
   const [selected, setSelected] = useState(() => new Set(projects.map(p => p.id)));
   const [tip, setTip] = useState(null);
+  const [pinState, setPinState] = useState(null);
 
   const toggleProject = (id) => {
     setSelected(prev => {
@@ -212,6 +259,13 @@ export function Gantt({ projects, data }) {
     });
   }, []);
   const handleBarLeave = useCallback(() => setTip(null), []);
+
+  const handleBarClick = useCallback((e, t, p) => {
+    e.stopPropagation();
+    setTip(null);
+    const rect = e.currentTarget.getBoundingClientRect();
+    setPinState({ pid: p.id, taskId: t.id, x: rect.left, y: rect.bottom + 6 });
+  }, []);
 
   const normalGroups = useMemo(() => {
     return selectedProjects.map(p => {
@@ -470,7 +524,8 @@ export function Gantt({ projects, data }) {
                                     ...(isMulti ? { top: barTop, height: barH, bottom: 'auto' } : {}),
                                   }}
                                   onMouseEnter={(e) => handleBarEnter(e, t, p)}
-                                  onMouseLeave={handleBarLeave}>
+                                  onMouseLeave={handleBarLeave}
+                                  onClick={(e) => handleBarClick(e, t, p)}>
                                   {!isMulti && <span className="g2-bar-dot"></span>}
                                   {!isMulti && <span className="g2-bar-name">{si === 0 ? t.n : '續'}</span>}
                                 </div>
@@ -495,33 +550,43 @@ export function Gantt({ projects, data }) {
                             style={{ width: COL_W }} />
                         ))}
                       </div>
-                      {tasks.map(t => (
-                        <div key={t.id} className="g2-task-row">
-                          {gridDays.map((d, i) => (
-                            <div key={i} className={`g2-grid-cell${d.isWE ? ' weekend' : ''}`}
-                              style={{ width: COL_W }} />
-                          ))}
-                          {barSegments(t.start, t.end, viewStart).map((seg, si) => (
-                            <div key={si}
-                              className={`g2-bar ${tk}${t.hours === 0 ? ' placeholder' : ''}`}
-                              style={{ left: seg.cs * COL_W + 2, width: seg.span * COL_W - 4 }}
-                              onMouseEnter={(e) => handleBarEnter(e, t, p)}
-                              onMouseLeave={handleBarLeave}>
-                              <span className="g2-bar-name">{si === 0 ? t.n : '續'}</span>
-                              {si === 0 && t.hours > 0 && (
-                                <span className="g2-bar-hrs">{t.hours}h</span>
-                              )}
-                            </div>
-                          ))}
-                          {t.waitEnd && barSegments(addD(t.end, 1), t.waitEnd, viewStart).map((seg, si) => (
-                            <div key={`w${si}`}
-                              className="g2-bar-wait"
-                              style={{ left: seg.cs * COL_W + 2, width: seg.span * COL_W - 4 }}>
-                              {si === 0 && <span className="g2-bar-wait-label">等待</span>}
-                            </div>
-                          ))}
-                        </div>
-                      ))}
+                      {tasks.map(t => {
+                        const projTask = (p.tasks || []).find(pt => pt.id === t.id);
+                        const isPinned = !!projTask?.pinnedStart;
+                        const pinD = isPinned ? pD(projTask.pinnedStart) : null;
+                        const pinOverridden = isPinned && pinD && new Date(t.start) > pinD;
+                        return (
+                          <div key={t.id} className="g2-task-row">
+                            {gridDays.map((d, i) => (
+                              <div key={i} className={`g2-grid-cell${d.isWE ? ' weekend' : ''}`}
+                                style={{ width: COL_W }} />
+                            ))}
+                            {barSegments(t.start, t.end, viewStart).map((seg, si) => (
+                              <div key={si}
+                                className={`g2-bar ${tk}${t.hours === 0 ? ' placeholder' : ''}${isPinned ? ' pinned' : ''}`}
+                                style={{ left: seg.cs * COL_W + 2, width: seg.span * COL_W - 4 }}
+                                onMouseEnter={(e) => handleBarEnter(e, t, p)}
+                                onMouseLeave={handleBarLeave}
+                                onClick={(e) => handleBarClick(e, t, p)}>
+                                <span className="g2-bar-name">{si === 0 ? t.n : '續'}</span>
+                                {si === 0 && t.hours > 0 && (
+                                  <span className="g2-bar-hrs">{t.hours}h</span>
+                                )}
+                                {si === 0 && isPinned && (
+                                  <i className={`ti ti-pin g2-pin-icon${pinOverridden ? ' warn' : ''}`}></i>
+                                )}
+                              </div>
+                            ))}
+                            {t.waitEnd && barSegments(addD(t.end, 1), t.waitEnd, viewStart).map((seg, si) => (
+                              <div key={`w${si}`}
+                                className="g2-bar-wait"
+                                style={{ left: seg.cs * COL_W + 2, width: seg.span * COL_W - 4 }}>
+                                {si === 0 && <span className="g2-bar-wait-label">等待</span>}
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })}
                     </div>
                   ))
                 )}
@@ -544,13 +609,23 @@ export function Gantt({ projects, data }) {
         </div>
       </div>
 
-      {tip && (
+      {tip && !pinState && (
         <div className="g2-tooltip" style={{ left: tip.x, top: tip.y }}>
           <strong>{tip.task.n}</strong>
           <span>{tip.project.name}</span>
           <span>{fmt(tip.task.start)} – {fmt(tip.task.end)}</span>
           {tip.task.hours > 0 && <span>{tip.task.hours}h</span>}
         </div>
+      )}
+
+      {pinState && (
+        <PinPopover
+          state={pinState}
+          projects={projects}
+          data={data}
+          onSave={onPinUpdate}
+          onClose={() => setPinState(null)}
+        />
       )}
     </div>
   );

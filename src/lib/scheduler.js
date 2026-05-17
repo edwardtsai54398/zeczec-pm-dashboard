@@ -64,6 +64,7 @@ function buildGlobalPool(projects, settings) {
         projStart: start,
         svS, svE, cpS, cpE,
         _task:    task,
+        pinnedStart: (proj.tasks || []).find((pt) => pt.id === id)?.pinnedStart || null,
       });
     }
   }
@@ -134,6 +135,11 @@ function allocateTask(entry, scheduled, gl, al, settings) {
     }
   }
 
+  const earFromDeps = new Date(ear);
+  if (entry.pinnedStart) { const ps = nWD(pD(entry.pinnedStart), bl); if (ps && ps > ear) ear = ps; }
+  // pinForced = pin actually moved ear past deps → bypass daily-load check so the task
+  // lands on the exact pinned date regardless of how loaded that day already is.
+  const pinForced = entry.pinnedStart && ear > earFromDeps;
   if (entry.tm === "dsv" && svS) { const s = nWD(svS, bl); if (s > ear) ear = s; }
   if (entry.tm === "dcp" && cpS) { const s = nWD(cpS, bl); if (s > ear) ear = s; }
   if (entry.tm === "post" && cpE) { const s = nWD(addD(cpE, 1), bl); if (s > ear) ear = s; }
@@ -151,7 +157,7 @@ function allocateTask(entry, scheduled, gl, al, settings) {
     let rem = hrs, cur = new Date(tS), safety = 0;
     while (rem > 0 && safety < 500) {
       if (!isWE(cur) && !isBO(cur, bl)) {
-        const av = hpd - gl(cur);
+        const av = pinForced ? hpd : (hpd - gl(cur));
         if (av > 0) { rem -= Math.min(rem, av); if (rem <= 0) { tE = cur; break; } }
       }
       cur = addD(cur, 1); safety++;
@@ -160,7 +166,7 @@ function allocateTask(entry, scheduled, gl, al, settings) {
     rem = hrs; cur = new Date(tS); safety = 0;
     while (rem > 0 && safety < 500) {
       if (!isWE(cur) && !isBO(cur, bl)) {
-        const av = hpd - gl(cur);
+        const av = pinForced ? hpd : (hpd - gl(cur));
         if (av > 0) { const u = Math.min(rem, av); al(cur, u); rem -= u; }
       }
       cur = addD(cur, 1); safety++;
