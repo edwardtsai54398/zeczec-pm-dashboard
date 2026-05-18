@@ -35,12 +35,25 @@ function buildGlobalPool(projects, settings) {
     const cpE = pD(proj.campaignEnd);
 
     if (!start && cpS) {
-      let th = 0, tw = 0;
-      for (const t of Object.values(tm)) {
-        if (t.dl) { th += t.hours || 0; if (t.w > 0) tw += t.w; }
+      // Critical-path estimate: propagate earliest-finish (in working days) through the DAG.
+      // Summing all waits treats parallel chains as sequential and massively overestimates.
+      const earliest = {};
+      const pending = new Set(Object.keys(tm));
+      let safety = 0;
+      while (pending.size > 0 && safety++ < pending.size * pending.size + 10) {
+        for (const id of [...pending]) {
+          const deps = tm[id].d.filter((did) => tm[did]);
+          if (deps.some((did) => pending.has(did))) continue;
+          const depEnd = deps.length ? Math.max(...deps.map((did) => earliest[did])) : 0;
+          earliest[id] = depEnd + Math.ceil((tm[id].hours || 0) / hpd) + (tm[id].w || 0);
+          pending.delete(id);
+        }
       }
-      const est = Math.ceil(th / hpd) + tw + 7;
-      const ref = svS || sWD(cpS, 30, bl);
+      const cpLen = Math.max(0, ...Object.keys(tm)
+        .filter((id) => tm[id].dl)
+        .map((id) => earliest[id] || 0));
+      const est = cpLen + 7;
+      const ref = svS || cpS;
       start = sWD(ref, est, bl);
       start = nWD(start, bl);
     }
@@ -238,7 +251,8 @@ function reshapeResult(scheduled, pool, projects, settings) {
     if (!sch[proj.id]) sch[proj.id] = {};
     if (!miles[proj.id]) miles[proj.id] = {};
   }
-
+  console.log(JSON.stringify({ sch, miles }));
+  
   return { sch, miles };
 }
 
