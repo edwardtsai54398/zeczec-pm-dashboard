@@ -667,6 +667,7 @@ button { cursor: pointer; }
 }
 .ptag.sv { background: var(--t-lime); color: var(--t-lime-ink); }
 .ptag.cp { background: var(--t-peach); color: var(--t-peach-ink); }
+.ptag.ns { background: var(--t-sky); color: var(--t-sky-ink); }
 
 .tpl-toggle {
   display: inline-flex; align-items: center; gap: 4px;

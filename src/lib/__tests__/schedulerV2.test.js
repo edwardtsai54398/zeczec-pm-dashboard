@@ -671,6 +671,44 @@ describe('pinnedStart move-back: task and downstream recover when pin is removed
   });
 });
 
+// ── ns（不拆分優先）─────────────────────────────────────────────────────────
+
+describe('ns（不拆分優先）', () => {
+  it('2.2 在排程記錄中帶有 ns=true', () => {
+    const p = proj('p', START, { surveyStart: '2026-07-06', campaignStart: '2026-08-17' });
+    const { sch } = runScheduleV2([p], settings);
+    expect(sch['p']['2.2'].ns).toBe(true);
+  });
+
+  it('2.4 在排程記錄中帶有 ns=true', () => {
+    const p = proj('p', START, { surveyStart: '2026-07-06', campaignStart: '2026-08-17' });
+    const { sch } = runScheduleV2([p], settings);
+    expect(sch['p']['2.4'].ns).toBe(true);
+  });
+
+  it('ns 任務（2.4, h=1）與非 ns 任務同日競爭時，ns 任務先完成', () => {
+    // 2.4 (h=1, ns=true) 依賴 2.3；2.3 完成後 2.4 和其他任務競爭同一天工時
+    // ns 任務應當天取得所有所需工時，start === end
+    const p = proj('p', START, { surveyStart: '2026-07-06', campaignStart: '2026-08-17' });
+    const { sch } = runScheduleV2([p], settings);
+    const t24 = sch['p']['2.4'];
+    expect(t24).toBeDefined();
+    expect(fmtF(t24.start)).toBe(fmtF(t24.end));
+  });
+
+  it('兩個專案共享工時時，ns 任務仍在同一天完成', () => {
+    const p1 = proj('p1', START, { surveyStart: '2026-07-06', campaignStart: '2026-08-17' });
+    const p2 = proj('p2', p2Scenarios.startDate, {
+      surveyStart: p2Scenarios.surveyStart,
+      campaignStart: p2Scenarios.campaignStart,
+    });
+    const { sch } = runScheduleV2([p1, p2], settings);
+    const t24 = sch['p1']['2.4'];
+    expect(t24).toBeDefined();
+    expect(fmtF(t24.start)).toBe(fmtF(t24.end));
+  });
+});
+
 // ── 雙專案 7.2–7.20 發文日驗證（共享工時下日期仍正確）───────────────────────
 
 describe('two-project 7.2–7.20 pinned dates under shared capacity', () => {

@@ -187,6 +187,9 @@ function ProjectDetail({ p, onUpdate, miles, onDelete }) {
                       {t.dl && (
                         <span className={`ptag ${t.dl}`}>{t.dl === "sv" ? "問卷前" : "開賣前"}</span>
                       )}
+                      {t.ns && (
+                        <span className="ptag ns">優先</span>
+                      )}
                     </label>
                   ))}
                 </div>

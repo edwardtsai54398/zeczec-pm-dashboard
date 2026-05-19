@@ -58,6 +58,7 @@ export function runScheduleV2(projects, settings) {
           dl:         t.dl,
           tm:         t.tm,
           sp:         t.sp || 0,
+          ns:         t.ns || false,
           d:          t.d || [],
           pinnedDate:  t.tm && preNDates[t.tm] ? preNDates[t.tm] : null,
           pinnedStart: pt.pinnedStart ? pD(pt.pinnedStart) : null,
@@ -212,6 +213,9 @@ export function runScheduleV2(projects, settings) {
           if (s.currentTask2) active.push({ s, ct: s.currentTask2, slot: 'secondary' });
         }
         active.sort((a, b) => {
+          // ns tasks claim capacity first to avoid being split across days
+          if (a.ct.entry.ns && !b.ct.entry.ns) return -1;
+          if (!a.ct.entry.ns && b.ct.entry.ns) return 1;
           const da = a.ct.entry.hardDeadline;
           const db = b.ct.entry.hardDeadline;
           if (!da && !db) return 0;
