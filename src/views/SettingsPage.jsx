@@ -51,12 +51,12 @@ export function SettingsPage({ settings, onUpdate }) {
             <input className="text-in" placeholder="例如：員工旅遊"
                    value={newBlackout.name} onChange={(e) => setNewBlackout((v) => ({ ...v, name: e.target.value }))} />
           </div>
-          <div>
+          <div style={{minWidth: 140 }}>
             <div style={{ fontSize: 11, color: "var(--ink-3)", marginBottom: 4, fontWeight: 500 }}>開始</div>
             <DateInput className="text-in"
                    value={newBlackout.start} onChange={(e) => setNewBlackout((v) => ({ ...v, start: e.target.value }))} />
           </div>
-          <div>
+          <div style={{ minWidth: 140 }}>
             <div style={{ fontSize: 11, color: "var(--ink-3)", marginBottom: 4, fontWeight: 500 }}>結束</div>
             <DateInput className="text-in"
                    value={newBlackout.end} onChange={(e) => setNewBlackout((v) => ({ ...v, end: e.target.value }))} />
