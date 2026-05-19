@@ -479,7 +479,7 @@ export function Gantt({ projects, data, onPinUpdate, settings }) {
                 <span className="g2-swatch tl"></span>今天
               </div>
               <div className="g2-legend-item">
-                <span className="g2-swatch ms"></span>外包
+                <span className="g2-swatch ms"></span>0 工時
               </div>
             </div>
 

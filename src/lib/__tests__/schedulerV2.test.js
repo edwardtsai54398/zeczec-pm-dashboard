@@ -159,6 +159,38 @@ describe('wait periods', () => {
   });
 });
 
+// ── Wait periods with blockout ────────────────────────────────────────────────
+
+describe('wait periods with blockout', () => {
+  it('2.8 (外包 w=4): blackout covering the wait period does NOT extend waitEnd', () => {
+    const { surveyStart, campaignStart } = scenarios[0]; // tight
+    const p = proj('p', START, { surveyStart, campaignStart });
+
+    // Step 1: run without blackout → get reference dates
+    const { sch: sch1 } = runScheduleV2([p], settings);
+    const t28 = sch1['p']['2.8'];
+
+    // Step 2: set blackout = [task.end+1 .. original waitEnd]
+    //         covers the full wait window; external party is still working
+    const boStart = fmtF(addD(t28.end, 1));
+    const boEnd   = fmtF(t28.waitEnd);
+    const boSettings = { hoursPerDay: 8, blackouts: [{ id: 'bo1', start: boStart, end: boEnd }] };
+
+    // Step 3: re-run with the blackout
+    const { sch: sch2 } = runScheduleV2([p], boSettings);
+    const t28_bo = sch2['p']['2.8'];
+
+    // task end unchanged (blackout starts after task work finishes)
+    expect(fmtF(t28_bo.end)).toBe(fmtF(t28.end));
+
+    // waitEnd must be UNCHANGED — external party's calendar ignores user blackout
+    expect(fmtF(t28_bo.waitEnd)).toBe(fmtF(t28.waitEnd));
+
+    // waitEnd = exactly w=4 working days skipping weekends only
+    expect(fmtF(t28_bo.waitEnd)).toBe(fmtF(aWD(t28_bo.end, 4, [])));
+  });
+});
+
 // ── Dependencies ──────────────────────────────────────────────────────────────
 
 describe('dependencies', () => {
@@ -675,16 +707,17 @@ describe('pinnedStart move-back: task and downstream recover when pin is removed
 // ── ns（不拆分優先）─────────────────────────────────────────────────────────
 
 describe('ns（不拆分優先）', () => {
-  it('2.2 在排程記錄中帶有 ns=true', () => {
-    const p = proj('p', START, { surveyStart: '2026-07-06', campaignStart: '2026-08-17' });
-    const { sch } = runScheduleV2([p], settings);
-    expect(sch['p']['2.2'].ns).toBe(true);
-  });
-
+  
   it('2.4 在排程記錄中帶有 ns=true', () => {
     const p = proj('p', START, { surveyStart: '2026-07-06', campaignStart: '2026-08-17' });
     const { sch } = runScheduleV2([p], settings);
     expect(sch['p']['2.4'].ns).toBe(true);
+  });
+  
+  it('2.5 在排程記錄中帶有 ns=true', () => {
+    const p = proj('p', START, { surveyStart: '2026-07-06', campaignStart: '2026-08-17' });
+    const { sch } = runScheduleV2([p], settings);
+    expect(sch['p']['2.5'].ns).toBe(true);
   });
 
   it('ns 任務（2.4, h=1）與非 ns 任務同日競爭時，ns 任務先完成', () => {
@@ -770,4 +803,45 @@ describe('two-project 7.2–7.20 pinned dates under shared capacity', () => {
     checkPinAndDeadline(pid, '7.18', '7.17', addD(ce, -7));
     checkPinAndDeadline(pid, '7.20', '7.19', addD(ce, 1));
   }
+});
+
+// ── 情境：2026-05-20 開始 + Jun10-16 請假 ─────────────────────────────────────
+
+describe('scenario: startDate 2026-05-20, Jun10-16 blockout', () => {
+  const scenarioProject = { startDate: '2026-05-20', surveyStart: '2026-07-02', campaignStart: '2026-08-07' };
+  const vacation = [{ id: 'vacation', start: '2026-06-10', end: '2026-06-16' }];
+  const boSettings = { hoursPerDay: 8, blackouts: vacation };
+
+  it('all waitEnds are exactly w working days (weekends only, user blackout ignored)', () => {
+    const p = proj('p', scenarioProject.startDate, { surveyStart: scenarioProject.surveyStart, campaignStart: scenarioProject.campaignStart });
+    const { sch } = runScheduleV2([p], boSettings);
+
+    for (const t of Object.values(sch['p'])) {
+      if (t.w > 0) {
+        // wait period = external party's calendar; only weekends skipped, not user blackout
+        expect(fmtF(t.waitEnd)).toBe(fmtF(aWD(t.end, t.w, [])));
+      } else {
+        expect(t.waitEnd).toBeNull();
+      }
+    }
+  });
+
+  it('2.8 waitEnd unchanged by blackout; downstream 2.9 starts later because user is on leave', () => {
+    const p = proj('p', scenarioProject.startDate, { surveyStart: scenarioProject.surveyStart, campaignStart: scenarioProject.campaignStart });
+    const { sch: schRef } = runScheduleV2([p], settings);     // no blackout
+    const { sch: schBo  } = runScheduleV2([p], boSettings);  // with blackout
+
+    const t28_ref = schRef['p']['2.8'];
+    const t28_bo  = schBo['p']['2.8'];
+    const t29_ref = schRef['p']['2.9'];
+    const t29_bo  = schBo['p']['2.9'];
+
+    // 2.8 ends before Jun10; waitEnd (Jun12) is within the blackout
+    // but external designer is unaffected → waitEnd must stay the same
+    expect(fmtF(t28_bo.end)).toBe(fmtF(t28_ref.end));
+    expect(fmtF(t28_bo.waitEnd)).toBe(fmtF(t28_ref.waitEnd));
+
+    // user can't start 2.9 during blackout → 2.9 start is pushed to after Jun16
+    expect(t29_bo.start > t29_ref.start).toBe(true);
+  });
 });

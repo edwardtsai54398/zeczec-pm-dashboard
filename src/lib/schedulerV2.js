@@ -133,7 +133,7 @@ export function runScheduleV2(projects, settings) {
           if (entry.hours > 0) break;
           const canStart = taskCanStart(entry, s.doneMap, s.projStart, s.enabledIds, bl);
           if (canStart === null || canStart > day) break;
-          const waitEnd = entry.w > 0 ? aWD(day, entry.w, bl) : null;
+          const waitEnd = entry.w > 0 ? aWD(day, entry.w, []) : null;
           s.done.push(makeRecord(entry, day, day, waitEnd));
           s.doneMap[entry.id] = { end: day, waitEnd };
           s.qIdx++;
@@ -164,7 +164,7 @@ export function runScheduleV2(projects, settings) {
                   // process 0-hour tasks inline so their dependents can start
                   const cs = taskCanStart(ahead, s.doneMap, s.projStart, s.enabledIds, bl);
                   if (cs !== null && cs <= day) {
-                    const wEnd = ahead.w > 0 ? aWD(day, ahead.w, bl) : null;
+                    const wEnd = ahead.w > 0 ? aWD(day, ahead.w, []) : null;
                     s.done.push(makeRecord(ahead, day, day, wEnd));
                     s.doneMap[ahead.id] = { end: day, waitEnd: wEnd };
                     changed = true;
@@ -229,7 +229,8 @@ export function runScheduleV2(projects, settings) {
           capacity -= alloc;
 
           if (ct.remaining <= 0) {
-            const waitEnd = ct.entry.w > 0 ? aWD(day, ct.entry.w, bl) : null;
+            // wait period = external party's calendar; user blackouts don't apply
+            const waitEnd = ct.entry.w > 0 ? aWD(day, ct.entry.w, []) : null;
             s.done.push(makeRecord(ct.entry, ct.start, day, waitEnd));
             s.doneMap[ct.entry.id] = { end: day, waitEnd };
             if (slot === 'main') s.currentTask  = null;
