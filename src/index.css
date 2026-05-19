@@ -969,6 +969,25 @@ textarea.text-in { resize: vertical; min-height: 64px; }
 .g2-day-name { font-size: 10px; color: var(--ink-3); letter-spacing: 0.04em; line-height: 1; }
 .g2-date-cell.today .g2-day-name  { color: var(--t-peach-ink); font-weight: 600; }
 
+/* period band */
+.g2-period-band {
+  position: relative;
+  display: flex;
+  height: 40px;
+  border-bottom: 2px solid var(--border);
+  overflow: hidden;
+}
+.g2-period-label {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 14px 0 18px;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--ink-3);
+  border-bottom: 2px solid var(--border);
+}
+
 /* track body */
 .g2-track-body { position: relative; }
 .g2-today-line {

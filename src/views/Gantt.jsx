@@ -316,6 +316,10 @@ export function Gantt({ projects, data, onPinUpdate }) {
   }, []);
   const handleBarLeave = useCallback(() => setTip(null), []);
 
+  const handlePeriodBarEnter = useCallback((e, bar) => {
+    setTip({ x: e.clientX, y: e.clientY, periodBar: bar });
+  }, []);
+
   const handleBarDblClick = useCallback((e, t, p) => {
     e.stopPropagation();
     setTip(null);
@@ -365,6 +369,29 @@ export function Gantt({ projects, data, onPinUpdate }) {
     return ms;
   }, [selectedProjects, viewStart, VIEW_DAYS]);
 
+  const { periodBars, pNumLanes } = useMemo(() => {
+    const bars = [];
+    for (const p of selectedProjects) {
+      const tk = toneKey(p);
+      if (p.surveyStart && p.surveyEnd)
+        bars.push({ p, tk, type: 'survey', label: `${p.name}--問卷期間`, start: p.surveyStart, end: p.surveyEnd });
+      if (p.campaignStart && p.campaignEnd)
+        bars.push({ p, tk, type: 'campaign', label: `${p.name}--募資期間`, start: p.campaignStart, end: p.campaignEnd });
+    }
+    bars.sort((a, b) => new Date(a.start) - new Date(b.start));
+    const laneEnds = [];
+    bars.forEach(bar => {
+      let placed = false;
+      for (let l = 0; l < laneEnds.length; l++) {
+        if (new Date(bar.start) >= laneEnds[l]) {
+          bar.lane = l; laneEnds[l] = new Date(bar.end); placed = true; break;
+        }
+      }
+      if (!placed) { bar.lane = laneEnds.length; laneEnds.push(new Date(bar.end)); }
+    });
+    return { periodBars: bars, pNumLanes: laneEnds.length };
+  }, [selectedProjects]);
+
   const totalTasks = useMemo(() => {
     let n = 0;
     selectedProjects.forEach(p => {
@@ -382,6 +409,11 @@ export function Gantt({ projects, data, onPinUpdate }) {
       </div>
     );
   }
+
+  const hasPeriodBars = periodBars.length > 0;
+  const pPAD = 4, pGAP = 2;
+  const pIsMulti = pNumLanes > 1;
+  const pBarH = pIsMulti ? Math.floor((40 - pPAD * 2 - pGAP * (pNumLanes - 1)) / pNumLanes) : undefined;
 
   return (
     <div className="g2-page">
@@ -474,6 +506,9 @@ export function Gantt({ projects, data, onPinUpdate }) {
               {overlayMode ? (
                 <>
                   <div className="g2-col-head">任務 · 多專案疊加</div>
+                  {hasPeriodBars && (
+                    <div className="g2-period-label">期間</div>
+                  )}
                   {overlayRows.map(({ id, n, bars }) => (
                     <div key={id} className="g2-task-name">
                       <span className="g2-pid">{id}</span>
@@ -489,6 +524,9 @@ export function Gantt({ projects, data, onPinUpdate }) {
               ) : (
                 <>
                   <div className="g2-col-head">任務</div>
+                  {hasPeriodBars && (
+                    <div className="g2-period-label">期間</div>
+                  )}
                   {normalGroups.map(({ p, tasks, tk }) => (
                     <div key={p.id}>
                       <div className={`g2-proj-banner ${tk}`}>
@@ -529,6 +567,27 @@ export function Gantt({ projects, data, onPinUpdate }) {
                   );
                 })}
               </div>
+
+              {hasPeriodBars && (
+                <div className="g2-period-band">
+                  {gridDays.map((d, i) => (
+                    <div key={i} className={`g2-grid-cell${d.isWE ? ' weekend' : ''}`} style={{ width: COL_W }} />
+                  ))}
+                  {periodBars.map((bar, bi) =>
+                    barSegments(bar.start, bar.end, viewStart, true).map((seg, si) => (
+                      <div key={`${bi}-${si}`}
+                        className={`g2-bar ${bar.tk}`}
+                        style={{
+                          left: seg.cs * COL_W, width: seg.span * COL_W,
+                          ...(pIsMulti ? { top: pPAD + bar.lane * (pBarH + pGAP), height: pBarH, bottom: 'auto' } : {}),
+                        }}
+                        onMouseEnter={(e) => handlePeriodBarEnter(e, bar)}
+                        onMouseLeave={handleBarLeave}
+                      />
+                    ))
+                  )}
+                </div>
+              )}
 
               <div className={`g2-track-body${overlayMode ? ' g2-overlay' : ''}`}>
 
@@ -666,10 +725,20 @@ export function Gantt({ projects, data, onPinUpdate }) {
 
       {tip && !pinState && (
         <div className="g2-tooltip" style={{ left: tip.x, top: tip.y }}>
-          <strong>{tip.task.n}</strong>
-          <span>{tip.project.name}</span>
-          <span>{fmt(tip.task.start)} – {fmt(tip.task.end)}</span>
-          {tip.task.hours > 0 && <span>{tip.task.hours}h</span>}
+          {tip.periodBar ? (
+            <>
+              <strong>{tip.periodBar.label}</strong>
+              <span>{tip.periodBar.p.name}</span>
+              <span>{fmt(tip.periodBar.start)} – {fmt(tip.periodBar.end)}</span>
+            </>
+          ) : (
+            <>
+              <strong>{tip.task.n}</strong>
+              <span>{tip.project.name}</span>
+              <span>{fmt(tip.task.start)} – {fmt(tip.task.end)}</span>
+              {tip.task.hours > 0 && <span>{tip.task.hours}h</span>}
+            </>
+          )}
         </div>
       )}
 
