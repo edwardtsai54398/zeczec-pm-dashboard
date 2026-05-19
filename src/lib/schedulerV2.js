@@ -9,8 +9,6 @@ export function mkTasks(tpl) {
 }
 
 export function runScheduleV2(projects, settings) {
-  // console.log(JSON.stringify(projects));
-  // console.log(JSON.stringify(settings));
 
   const bl = settings?.blackouts || [];
   const hpd = settings?.hoursPerDay || 8;
@@ -245,8 +243,6 @@ export function runScheduleV2(projects, settings) {
     day = addD(day, 1);
   }
 
-  // const result = buildResult(states, projects, bl);
-  // console.log("result:", result.sch.saba['2.2']);
   
   return buildResult(states, projects, bl);
 }
