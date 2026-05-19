@@ -948,6 +948,7 @@ textarea.text-in { resize: vertical; min-height: 64px; }
   gap: 1px; position: relative;
 }
 .g2-date-cell.weekend { background: var(--surface-tint); }
+.g2-date-cell.blackout { background: repeating-linear-gradient(45deg, rgba(22,22,19,.06) 0 6px, transparent 6px 12px), var(--surface-tint); }
 .g2-date-cell.today   { background: rgba(245,210,181,.15); }
 .g2-today-bubble {
   position: absolute; top: -16px; left: 50%;
@@ -965,7 +966,8 @@ textarea.text-in { resize: vertical; min-height: 64px; }
   font-size: 14px; font-weight: 500; color: var(--ink);
   font-variant-numeric: tabular-nums; letter-spacing: -0.01em; line-height: 1;
 }
-.g2-date-cell.weekend .g2-day-num { color: var(--ink-3); }
+.g2-date-cell.weekend .g2-day-num,
+.g2-date-cell.blackout .g2-day-num { color: var(--ink-3); }
 .g2-date-cell.today   .g2-day-num { color: var(--t-peach-ink); font-weight: 700; }
 .g2-day-name { font-size: 10px; color: var(--ink-3); letter-spacing: 0.04em; line-height: 1; }
 .g2-date-cell.today .g2-day-name  { color: var(--t-peach-ink); font-weight: 600; }
@@ -1016,6 +1018,10 @@ textarea.text-in { resize: vertical; min-height: 64px; }
   background: repeating-linear-gradient(45deg, rgba(22,22,19,.025) 0 6px, transparent 6px 12px);
 }
 .g2-grid-cell.weekend.dim { background-color: var(--surface-tint); }
+.g2-grid-cell.blackout {
+  background: repeating-linear-gradient(45deg, rgba(22,22,19,.06) 0 6px, transparent 6px 12px);
+}
+.g2-grid-cell.blackout.dim { background-color: var(--surface-tint); }
 
 /* bars — normal mode: solid opaque */
 .g2-bar {

@@ -91,7 +91,7 @@ export default function App() {
             onAddProject={addProject} onJump={() => setView("gantt")}
           />
         )}
-        {view === "gantt" && <Gantt projects={projects} data={sch} onPinUpdate={updateTaskPin} />}
+        {view === "gantt" && <Gantt projects={projects} data={sch} onPinUpdate={updateTaskPin} settings={settings} />}
         {view === "project" && (
           <ProjectPage
             projects={projects} sel={sel} setSel={setSel}

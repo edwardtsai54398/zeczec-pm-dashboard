@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { dBt, addD, fmt, pD } from '../lib/dateUtils.js';
+import { dBt, addD, fmt, pD, isBO as checkBO } from '../lib/dateUtils.js';
 import { TONES } from './shared.js';
 import { BT } from '../lib/tasks.js';
 import { DateInput } from '../components/DateInput.jsx';
@@ -168,7 +168,7 @@ function barSegments(startD, endD, gridStart, allowWeekends = false) {
   return segments;
 }
 
-export function Gantt({ projects, data, onPinUpdate }) {
+export function Gantt({ projects, data, onPinUpdate, settings }) {
   const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
 
   const [zoomIdx, setZoomIdx] = useState(1);
@@ -223,14 +223,16 @@ export function Gantt({ projects, data, onPinUpdate }) {
   const selectedProjects = projects.filter(p => selected.has(p.id));
 
   const gridDays = useMemo(() => {
+    const bl = settings?.blackouts || [];
     const arr = [];
     for (let i = 0; i < VIEW_DAYS; i++) {
       const d = addD(viewStart, i);
       const dow = d.getDay();
-      arr.push({ date: d, isWE: dow === 0 || dow === 6, dow });
+      const isWE = dow === 0 || dow === 6;
+      arr.push({ date: d, isWE, dow, isBO: !isWE && checkBO(d, bl) });
     }
     return arr;
-  }, [viewStart, VIEW_DAYS]);
+  }, [viewStart, VIEW_DAYS, settings]);
 
   const todayOffset = dBt(viewStart, today);
   const todayVisible = todayOffset >= 0 && todayOffset < VIEW_DAYS;
@@ -559,7 +561,7 @@ export function Gantt({ projects, data, onPinUpdate }) {
                   const isToday = todayVisible && i === todayOffset;
                   return (
                     <div key={i}
-                      className={`g2-date-cell${d.isWE ? ' weekend' : ''}${isToday ? ' today' : ''}`}
+                      className={`g2-date-cell${d.isWE ? ' weekend' : d.isBO ? ' blackout' : ''}${isToday ? ' today' : ''}`}
                       style={{ width: COL_W }}>
                       {isToday && <span className="g2-today-bubble">今天</span>}
                       <span className="g2-day-num">{d.date.getDate()}</span>
@@ -572,7 +574,7 @@ export function Gantt({ projects, data, onPinUpdate }) {
               {hasPeriodBars && (
                 <div className="g2-period-band">
                   {gridDays.map((d, i) => (
-                    <div key={i} className={`g2-grid-cell${d.isWE ? ' weekend' : ''}`} style={{ width: COL_W }} />
+                    <div key={i} className={`g2-grid-cell${d.isWE ? ' weekend' : d.isBO ? ' blackout' : ''}`} style={{ width: COL_W }} />
                   ))}
                   {periodBars.map((bar, bi) =>
                     barSegments(bar.start, bar.end, viewStart, true).map((seg, si) => (
@@ -623,7 +625,7 @@ export function Gantt({ projects, data, onPinUpdate }) {
                     return (
                       <div key={id} className="g2-task-row">
                         {gridDays.map((d, i) => (
-                          <div key={i} className={`g2-grid-cell${d.isWE ? ' weekend' : ''}`}
+                          <div key={i} className={`g2-grid-cell${d.isWE ? ' weekend' : d.isBO ? ' blackout' : ''}`}
                             style={{ width: COL_W }} />
                         ))}
                         {bars.map(({ p, t, tk }, barIdx) => {
@@ -661,7 +663,7 @@ export function Gantt({ projects, data, onPinUpdate }) {
                     <div key={p.id}>
                       <div className={`g2-proj-row ${tk}`}>
                         {gridDays.map((d, i) => (
-                          <div key={i} className={`g2-grid-cell${d.isWE ? ' weekend dim' : ''}`}
+                          <div key={i} className={`g2-grid-cell${d.isWE ? ' weekend dim' : d.isBO ? ' blackout dim' : ''}`}
                             style={{ width: COL_W }} />
                         ))}
                       </div>
@@ -673,7 +675,7 @@ export function Gantt({ projects, data, onPinUpdate }) {
                         return (
                           <div key={t.id} className="g2-task-row">
                             {gridDays.map((d, i) => (
-                              <div key={i} className={`g2-grid-cell${d.isWE ? ' weekend' : ''}`}
+                              <div key={i} className={`g2-grid-cell${d.isWE ? ' weekend' : d.isBO ? ' blackout' : ''}`}
                                 style={{ width: COL_W }} />
                             ))}
                             {barSegments(t.start, t.end, viewStart, WEEKEND_BAR_TASKS.has(t.id)).map((seg, si) => (
