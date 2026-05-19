@@ -23,7 +23,11 @@ function TaskEditModal({ state, projects, data, onSave, onClose }) {
 
   const effectiveStart = scheduled?.start ? new Date(scheduled.start) : null;
   const pinD = pinEnabled && pinDate ? pD(pinDate) : null;
-  const isPinOverridden = pinD && effectiveStart && effectiveStart > pinD;
+  // If effectiveStart equals the previously saved pin date, the pin itself caused that date
+  // (not a dependency constraint), so moving the pin earlier should not trigger a warning.
+  const oldPinD = projTask?.pinnedStart ? pD(projTask.pinnedStart) : null;
+  const pinWasCausingEffectiveStart = oldPinD && effectiveStart && +effectiveStart === +oldPinD;
+  const isPinOverridden = pinD && effectiveStart && effectiveStart > pinD && !pinWasCausingEffectiveStart;
 
   const handleSave = () => {
     onSave(state.pid, state.taskId, {
@@ -95,6 +99,8 @@ function TaskEditModal({ state, projects, data, onSave, onClose }) {
   );
 }
 
+const WEEKEND_BAR_TASKS = new Set(['7.3', '7.5', '7.7', '7.8', '7.10', '7.12', '7.14', '7.16', '7.18', '7.20']);
+
 const LABEL_W = 240;
 const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const MONTH_EN = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
@@ -118,7 +124,7 @@ function monday(d) {
   return r;
 }
 
-function barSegments(startD, endD, gridStart) {
+function barSegments(startD, endD, gridStart, allowWeekends = false) {
   if (!startD || !endD) return [];
   const gs = new Date(gridStart); gs.setHours(0, 0, 0, 0);
   const end = new Date(endD); end.setHours(0, 0, 0, 0);
@@ -130,7 +136,8 @@ function barSegments(startD, endD, gridStart) {
 
   while (cur <= end) {
     const dow = cur.getDay();
-    if (dow !== 0 && dow !== 6) {
+    const isWD = allowWeekends || (dow !== 0 && dow !== 6);
+    if (isWD) {
       if (!segStart) segStart = new Date(cur);
     } else if (segStart) {
       let lastWD = new Date(cur);
@@ -146,11 +153,13 @@ function barSegments(startD, endD, gridStart) {
   }
 
   if (segStart) {
-    let lastWD = new Date(end);
-    while (lastWD.getDay() === 0 || lastWD.getDay() === 6) lastWD.setDate(lastWD.getDate() - 1);
-    if (lastWD >= segStart) {
+    let lastD = new Date(end);
+    if (!allowWeekends) {
+      while (lastD.getDay() === 0 || lastD.getDay() === 6) lastD.setDate(lastD.getDate() - 1);
+    }
+    if (lastD >= segStart) {
       const cs = Math.round((segStart - gs) / 864e5);
-      const span = Math.round((lastWD - segStart) / 864e5) + 1;
+      const span = Math.round((lastD - segStart) / 864e5) + 1;
       if (span > 0) segments.push({ cs, span });
     }
   }
@@ -561,7 +570,7 @@ export function Gantt({ projects, data, onPinUpdate }) {
                           const barTop = isMulti ? PAD + barIdx * (barH + GAP) : undefined;
                           return (
                             <div key={p.id}>
-                              {barSegments(t.start, t.end, viewStart).map((seg, si) => (
+                              {barSegments(t.start, t.end, viewStart, WEEKEND_BAR_TASKS.has(t.id)).map((seg, si) => (
                                 <div key={`${p.id}-${si}`}
                                   className={`g2-bar ${tk}${t.hours === 0 ? ' placeholder' : ''}${isMulti ? ' split' : ''}`}
                                   style={{
@@ -607,7 +616,7 @@ export function Gantt({ projects, data, onPinUpdate }) {
                               <div key={i} className={`g2-grid-cell${d.isWE ? ' weekend' : ''}`}
                                 style={{ width: COL_W }} />
                             ))}
-                            {barSegments(t.start, t.end, viewStart).map((seg, si) => (
+                            {barSegments(t.start, t.end, viewStart, WEEKEND_BAR_TASKS.has(t.id)).map((seg, si) => (
                               <div key={si}
                                 className={`g2-bar ${tk}${t.hours === 0 ? ' placeholder' : ''}${isPinned ? ' pinned' : ''}`}
                                 style={{ left: seg.cs * COL_W + 2, width: seg.span * COL_W - 4 }}

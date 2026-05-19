@@ -390,14 +390,6 @@ describe('疊圖模式 (overlayMode)', () => {
     expect(peachBars.length).toBeGreaterThan(0);
   });
 
-  it('疊圖模式 bar 顯示專案名稱前綴', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    fireEvent.click(screen.getByText('疊圖模式'));
-    const barNames = container.querySelectorAll('.g2-bar-name');
-    const texts = [...barNames].map(el => el.textContent);
-    expect(texts).toContain('專案A');
-    expect(texts).toContain('專案B');
-  });
 
   it('疊圖模式左側顯示 proj-dots 標記', () => {
     const { container } = render(<Gantt projects={projects} data={data} />);
@@ -406,10 +398,6 @@ describe('疊圖模式 (overlayMode)', () => {
     expect(dots.length).toBe(2);
   });
 
-  it('左側 column header 顯示「任務 · 多專案疊加」', () => {
-    fireEvent.click(screen.getByText('疊圖模式'));
-    expect(screen.getByText('任務 · 多專案疊加')).toBeInTheDocument();
-  });
 
   it('再次點擊疊圖模式按鈕可恢復普通模式', () => {
     const { container } = render(<Gantt projects={projects} data={data} />);

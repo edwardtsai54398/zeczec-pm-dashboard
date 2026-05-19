@@ -42,6 +42,12 @@ export const nWD = (d, bl) => {
   return c;
 };
 
+export const pWD = (d, bl) => {
+  let c = new Date(d);
+  while (isWE(c) || isBO(c, bl)) c = addD(c, -1);
+  return c;
+};
+
 export const aWD = (s, n, bl) => {
   let c = new Date(s), r = n;
   while (r > 0) {

@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
-import { runSchedule } from './lib/scheduler.js';
-import { mkTasks } from './lib/scheduler.js';
+import { runScheduleV2 } from './lib/schedulerV2.js';
+import { mkTasks } from './lib/schedulerV2.js';
 import { D_PROJECTS, D_SETTINGS, TONE_PALETTE, ACCENT_PALETTES, TWEAK_DEFAULTS } from './constants.js';
 import { usePersistence } from './hooks/usePersistence.js';
 import { useTheme } from './hooks/useTheme.js';
@@ -26,7 +26,7 @@ export default function App() {
   useTheme(t);
 
   const { sch, miles } = useMemo(() => {
-    try { return runSchedule(projects, settings); }
+    try { return runScheduleV2(projects, settings); }
     catch (e) { console.error("schedule error", e); return { sch: {}, miles: {} }; }
   }, [projects, settings]);
 

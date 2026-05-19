@@ -1,4 +1,4 @@
-import { mkTasks } from './lib/scheduler.js';
+import { mkTasks } from './lib/schedulerV2.js';
 import { BT } from './lib/tasks.js';
 
 export const STORAGE_KEY = "cfpm4";
@@ -51,22 +51,22 @@ export const D_PROJECTS = [
     tasks: mkTasks("full"), kols: [],
     notes: "電檢完成，可立刻啟動",
   },
-  {
-    id: "bleeq", name: "BleeqUP AI 眼鏡", template: "pm", mode: "backward",
-    startDate: "", surveyStart: "", surveyEnd: "",
-    campaignStart: "", campaignEnd: "",
-    tone: "lime", color: "#1D9E75",
-    tasks: mkTasks("pm").map((t) => ({ ...t, enabled: t.enabled && !(BT.find((b) => b.id === t.id) || {}).sh })),
-    kols: [],
-    notes: "電檢未通過。不拍攝，用原廠素材",
-  },
-  {
-    id: "inmo", name: "INMO AI 眼鏡", template: "pm", mode: "backward",
-    startDate: "", surveyStart: "", surveyEnd: "",
-    campaignStart: "", campaignEnd: "",
-    tone: "peach", color: "#D85A30",
-    tasks: mkTasks("pm").map((t) => ({ ...t, enabled: t.enabled && !(BT.find((b) => b.id === t.id) || {}).sh })),
-    kols: [],
-    notes: "電檢未通過。不拍攝，用原廠素材",
-  },
+  // {
+  //   id: "bleeq", name: "BleeqUP AI 眼鏡", template: "pm", mode: "backward",
+  //   startDate: "", surveyStart: "", surveyEnd: "",
+  //   campaignStart: "", campaignEnd: "",
+  //   tone: "lime", color: "#1D9E75",
+  //   tasks: mkTasks("pm").map((t) => ({ ...t, enabled: t.enabled && !(BT.find((b) => b.id === t.id) || {}).sh })),
+  //   kols: [],
+  //   notes: "電檢未通過。不拍攝，用原廠素材",
+  // },
+  // {
+  //   id: "inmo", name: "INMO AI 眼鏡", template: "pm", mode: "backward",
+  //   startDate: "", surveyStart: "", surveyEnd: "",
+  //   campaignStart: "", campaignEnd: "",
+  //   tone: "peach", color: "#D85A30",
+  //   tasks: mkTasks("pm").map((t) => ({ ...t, enabled: t.enabled && !(BT.find((b) => b.id === t.id) || {}).sh })),
+  //   kols: [],
+  //   notes: "電檢未通過。不拍攝，用原廠素材",
+  // },
 ];
