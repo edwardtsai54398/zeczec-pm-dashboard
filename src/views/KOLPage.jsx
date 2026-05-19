@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { fmtF, pD, addD } from '../lib/dateUtils.js';
 import { getTone } from './shared.js';
+import { DateInput } from '../components/DateInput.jsx';
 
 const KOL_MILESTONES = [
   { id: "ship",   n: "寄出產品",      o: 0 },
@@ -124,7 +125,7 @@ export function KOLPage({ projects, onUpdate }) {
               {k.milestones.map((ms) => (
                 <div key={ms.id} className="kol-row">
                   <span className="lbl">{ms.name}</span>
-                  <input type="date" value={ms.date || ""}
+                  <DateInput value={ms.date || ""}
                          onChange={(e) => updateMilestone(k.id, ms.id, e.target.value)} />
                 </div>
               ))}

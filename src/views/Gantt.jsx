@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { dBt, addD, fmt, pD } from '../lib/dateUtils.js';
 import { TONES } from './shared.js';
 import { BT } from '../lib/tasks.js';
+import { DateInput } from '../components/DateInput.jsx';
 
 function TaskEditModal({ state, projects, data, onSave, onClose }) {
   const proj = projects.find((p) => p.id === state.pid);
@@ -77,7 +78,7 @@ function TaskEditModal({ state, projects, data, onSave, onClose }) {
               <input type="checkbox" checked={pinEnabled} onChange={(e) => setPinEnabled(e.target.checked)} />
               <span className="g2-modal-label" style={{ margin: 0 }}>固定開始日期</span>
               {pinEnabled && (
-                <input type="date" className="g2-pin-date" style={{ marginLeft: 'auto' }}
+                <DateInput className="g2-pin-date" style={{ marginLeft: 'auto' }}
                   value={pinDate} onChange={(e) => setPinDate(e.target.value)} />
               )}
             </label>

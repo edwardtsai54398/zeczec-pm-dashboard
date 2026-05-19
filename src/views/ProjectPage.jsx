@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { dBt, fmt, pD } from '../lib/dateUtils.js';
+import { dBt, fmt, fmtF, pD, addD } from '../lib/dateUtils.js';
 import { BT, PH } from '../lib/tasks.js';
 import { mkTasks } from '../lib/schedulerV2.js';
 import { getTone } from './shared.js';
+import { DateInput } from '../components/DateInput.jsx';
 
 export function ProjectPage({ projects, sel, setSel, onUpdate, miles, onAdd, onDelete }) {
   const p = projects.find((x) => x.id === sel);
@@ -106,7 +107,7 @@ function ProjectDetail({ p, onUpdate, miles, onDelete }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
           <div className="date-cell tone-lavender">
             <div className="lbl">專案啟動日</div>
-            <input type="date" value={p.startDate || ""} onChange={(e) => u("startDate")(e.target.value)} />
+            <DateInput value={p.startDate || ""} onChange={(e) => u("startDate")(e.target.value)} />
             {p.mode === "backward" && !p.startDate && miles?.calcStart && (
               <div className="hint" style={{ color: "var(--t-lavender-ink)" }}>建議 {fmt(miles.calcStart)} 起</div>
             )}
@@ -124,23 +125,33 @@ function ProjectDetail({ p, onUpdate, miles, onDelete }) {
         <div className="date-grid" style={{ marginBottom: 10 }}>
           <div className="date-cell tone-lime">
             <div className="lbl">問卷上線日</div>
-            <input type="date" value={p.surveyStart || ""} onChange={(e) => u("surveyStart")(e.target.value)} />
-            {!p.surveyStart && miles?.eSv && <div className="hint" style={{ color: "var(--t-lime-ink)" }}>最快 {fmt(miles.eSv)}</div>}
+            <DateInput value={p.surveyStart || ""} onChange={(e) => {
+              const v = e.target.value;
+              const autoEnd = v ? fmtF(addD(pD(v), 30)) : "";
+              onUpdate({ ...p, surveyStart: v, surveyEnd: autoEnd });
+            }} />
+            {!p.surveyStart && miles?.eSv && <div className="hint" style={{ color: "var(--t-lime-ink)" }}>建議 {fmt(miles.eSv)}</div>}
           </div>
           <div className="date-cell tone-lime">
             <div className="lbl">問卷結束日</div>
-            <input type="date" value={p.surveyEnd || ""} onChange={(e) => u("surveyEnd")(e.target.value)} />
+            <DateInput value={p.surveyEnd || ""} onChange={(e) => u("surveyEnd")(e.target.value)} />
+            {!p.surveyEnd && p.surveyStart && <div className="hint" style={{ color: "var(--t-lime-ink)" }}>上線日 +30 天</div>}
           </div>
         </div>
         <div className="date-grid">
           <div className="date-cell tone-peach">
             <div className="lbl">募資上線日</div>
-            <input type="date" value={p.campaignStart || ""} onChange={(e) => u("campaignStart")(e.target.value)} />
-            {!p.campaignStart && miles?.eCp && <div className="hint" style={{ color: "var(--t-peach-ink)" }}>最快 {fmt(miles.eCp)}</div>}
+            <DateInput value={p.campaignStart || ""} onChange={(e) => {
+              const v = e.target.value;
+              const autoEnd = v ? fmtF(addD(pD(v), 60)) : "";
+              onUpdate({ ...p, campaignStart: v, campaignEnd: autoEnd });
+            }} />
+            {!p.campaignStart && miles?.eCp && <div className="hint" style={{ color: "var(--t-peach-ink)" }}>建議 {fmt(miles.eCp)}</div>}
           </div>
           <div className="date-cell tone-peach">
             <div className="lbl">募資結束日</div>
-            <input type="date" value={p.campaignEnd || ""} onChange={(e) => u("campaignEnd")(e.target.value)} />
+            <DateInput value={p.campaignEnd || ""} onChange={(e) => u("campaignEnd")(e.target.value)} />
+            {!p.campaignEnd && p.campaignStart && <div className="hint" style={{ color: "var(--t-peach-ink)" }}>上線日 +60 天</div>}
           </div>
         </div>
         {p.campaignStart && p.campaignEnd && (

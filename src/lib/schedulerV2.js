@@ -292,17 +292,30 @@ function buildResult(states, projects, bl) {
     const pid = s.proj.id;
     sch[pid] = {};
 
-    let eSv = null;
-    let eCp = null;
+    let sv219End = null;
     for (const rec of s.done) {
       sch[pid][rec.id] = rec;
-      if (rec.dl === 'sv') eSv = eSv ? (rec.end > eSv ? rec.end : eSv) : rec.end;
-      if (rec.dl === 'cp' || rec.dl === 'pre10') eCp = eCp ? (rec.end > eCp ? rec.end : eCp) : rec.end;
+      if (rec.id === '2.19') sv219End = rec.end;
     }
 
+    // eSv: next WD after task 2.19 (問卷開跑) ends
+    const eSv = sv219End ? nWD(addD(sv219End, 1), bl) : null;
+
+    // eCp: (surveyEnd || surveyStart+30 || eSv+30) + 5 WD
+    const surveyEndDate   = pD(s.proj.surveyEnd);
+    const surveyStartDate = pD(s.proj.surveyStart);
+    const cpBase = surveyEndDate
+      ? surveyEndDate
+      : surveyStartDate
+        ? addD(surveyStartDate, 30)
+        : eSv
+          ? addD(eSv, 30)
+          : null;
+    const eCp = cpBase ? aWD(cpBase, 5, bl) : null;
+
     miles[pid] = {
-      eSv:       eSv ? nWD(addD(eSv, 1), bl) : null,
-      eCp:       eCp ? nWD(addD(eCp, 1), bl) : null,
+      eSv,
+      eCp,
       calcStart: s.projStart,
     };
   }

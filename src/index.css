@@ -1230,7 +1230,7 @@ textarea.text-in { resize: vertical; min-height: 64px; }
   font-size: 12px;
 }
 .kol-row .lbl { color: var(--ink-2); }
-.kol-row input[type=date] {
+.kol-row .di-trigger {
   font-size: 12px; padding: 4px 8px;
   border: 1px solid var(--border);
   background: var(--surface-tint);
@@ -1341,3 +1341,56 @@ body.density-compact .stat-value { font-size: 32px; }
 }
 .modal-btn.confirm:hover { background: #A93226; }
 .modal-btn:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
+
+/* ╭─ DateInput custom picker ─────────────────────╮ */
+.di-wrap { position: relative; }
+.di-trigger {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; text-align: left;
+  border: none; background: transparent; outline: none;
+  cursor: pointer; padding: 0;
+  font-size: 14px; font-weight: 500;
+  color: var(--ink); font-family: var(--font-sans);
+}
+.di-ph { color: var(--ink-4); font-weight: 400; }
+.di-x {
+  width: 17px; height: 17px; border-radius: 50%;
+  border: 1.5px solid var(--ink-4);
+  color: var(--ink-3);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.di-x i { font-size: 10px; }
+.di-x:hover { border-color: var(--ink-3); color: var(--ink); }
+.di-popup {
+  position: fixed; z-index: 9999;
+  background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  padding: 10px; min-width: 224px;
+}
+.di-hd {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+}
+.di-title { font-size: 13px; font-weight: 600; color: var(--ink); font-family: var(--font-sans); }
+.di-nav {
+  width: 26px; height: 26px; border-radius: 6px;
+  border: 1px solid var(--border); background: transparent;
+  cursor: pointer; font-size: 16px; color: var(--ink-2);
+  display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.di-nav:hover { background: var(--surface-tint); color: var(--ink); }
+.di-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; }
+.di-dow {
+  font-size: 10px; text-align: center; color: var(--ink-3);
+  font-weight: 500; padding: 4px 0; font-family: var(--font-sans);
+}
+.di-day {
+  width: 100%; aspect-ratio: 1;
+  border: none; border-radius: 5px; background: transparent;
+  cursor: pointer; font-size: 12px; color: var(--ink);
+  font-family: var(--font-sans);
+  display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.di-day:hover { background: var(--surface-tint); }
+.di-day.sel { background: var(--ink); color: white; font-weight: 600; }

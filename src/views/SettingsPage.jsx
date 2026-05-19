@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { DateInput } from '../components/DateInput.jsx';
 
 export function SettingsPage({ settings, onUpdate }) {
   const [newBlackout, setNewBlackout] = useState({ name: "", start: "", end: "" });
@@ -52,12 +53,12 @@ export function SettingsPage({ settings, onUpdate }) {
           </div>
           <div>
             <div style={{ fontSize: 11, color: "var(--ink-3)", marginBottom: 4, fontWeight: 500 }}>開始</div>
-            <input className="text-in" type="date"
+            <DateInput className="text-in"
                    value={newBlackout.start} onChange={(e) => setNewBlackout((v) => ({ ...v, start: e.target.value }))} />
           </div>
           <div>
             <div style={{ fontSize: 11, color: "var(--ink-3)", marginBottom: 4, fontWeight: 500 }}>結束</div>
-            <input className="text-in" type="date"
+            <DateInput className="text-in"
                    value={newBlackout.end} onChange={(e) => setNewBlackout((v) => ({ ...v, end: e.target.value }))} />
           </div>
           <button className="cta-primary" style={{ padding: "10px 18px" }} onClick={addBlackout}>
