@@ -974,11 +974,12 @@ textarea.text-in { resize: vertical; min-height: 64px; }
 
 /* period band */
 .g2-period-band {
-  position: relative;
+  position: sticky; top: 68px; z-index: 3;
   display: flex;
   height: 40px;
   border-bottom: 2px solid var(--border);
   overflow: hidden;
+  background: white;
 }
 .g2-period-label {
   height: 40px;
@@ -989,6 +990,7 @@ textarea.text-in { resize: vertical; min-height: 64px; }
   letter-spacing: 0.16em; text-transform: uppercase;
   color: var(--ink-3);
   border-bottom: 2px solid var(--border);
+  position: sticky; top: 68px; z-index: 5; background: white;
 }
 
 /* track body */
