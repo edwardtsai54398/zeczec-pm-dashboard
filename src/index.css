@@ -653,7 +653,7 @@ button { cursor: pointer; }
   font-weight: 500;
 }
 .phase-row .pname {
-  font-size: 12.5px; flex: 1;
+  font-size: 13px; flex: 1;
   color: var(--ink);
 }
 .phase-row .pmeta {
@@ -815,7 +815,7 @@ textarea.text-in { resize: vertical; min-height: 64px; }
   display: inline-flex; align-items: center; gap: 6px;
   padding: 7px 14px 7px 10px; background: white;
   border: 1.5px solid var(--border-strong); border-radius: 999px;
-  font-size: 12.5px; font-weight: 500; color: var(--ink);
+  font-size: 13px; font-weight: 500; color: var(--ink);
   cursor: pointer; transition: all .15s;
 }
 .g2-mode-toggle:hover { background: var(--surface-tint); }
@@ -908,11 +908,11 @@ textarea.text-in { resize: vertical; min-height: 64px; }
 .g2-task-name {
   height: 40px; padding: 0 14px 0 18px;
   display: flex; align-items: center; gap: 8px;
-  font-size: 12.5px; color: var(--ink);
+  font-size: 13px; color: var(--ink);
   border-bottom: 1px solid var(--border);
   white-space: nowrap; overflow: hidden;
 }
-.g2-pid { font-size: 10px; color: var(--ink-3); font-variant-numeric: tabular-nums; min-width: 32px; }
+.g2-pid { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; min-width: 32px; }
 .g2-name { flex: 1; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
 .g2-proj-dots { display: inline-flex; align-items: center; gap: 3px; }
 .g2-pd { width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 0 1.5px white; }
@@ -1030,7 +1030,7 @@ textarea.text-in { resize: vertical; min-height: 64px; }
   position: absolute; top: 5px; bottom: 5px;
   border-radius: 6px; padding: 0 8px;
   display: flex; align-items: center; gap: 6px;
-  font-size: 11px; font-weight: 500;
+  font-size: 12px; font-weight: 500;
   white-space: nowrap; overflow: hidden;
   cursor: default; transition: transform .12s;
 }

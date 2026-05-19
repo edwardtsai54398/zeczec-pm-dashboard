@@ -1,3 +1,5 @@
+import avatarImg from "../assets/avatar.jpg";
+
 export function Topbar({ projectCount, showAvatar }) {
   return (
     <header className="topbar">
@@ -15,7 +17,7 @@ export function Topbar({ projectCount, showAvatar }) {
       <button className="icon-pill" title="搜尋">
         <i className="ti ti-search"></i>
       </button>
-      {showAvatar && <div className="avatar" title="使用者">PM</div>}
+      {showAvatar && <div className="avatar" title="使用者"><img src={avatarImg} alt="使用者" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }} /></div>}
     </header>
   );
 }

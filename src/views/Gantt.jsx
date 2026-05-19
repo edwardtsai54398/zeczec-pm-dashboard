@@ -407,7 +407,7 @@ export function Gantt({ projects, data, onPinUpdate, settings }) {
   if (!projects.length || !hasData) {
     return (
       <div className="empty">
-        <i className="ti ti-chart-gantt"></i>
+        <i className="ti ti-timeline"></i>
         設定啟動日期後即可看到甘特圖
       </div>
     );
@@ -479,7 +479,7 @@ export function Gantt({ projects, data, onPinUpdate, settings }) {
                 <span className="g2-swatch tl"></span>今天
               </div>
               <div className="g2-legend-item">
-                <span className="g2-swatch ms"></span>
+                <span className="g2-swatch ms"></span>外包
               </div>
             </div>
 

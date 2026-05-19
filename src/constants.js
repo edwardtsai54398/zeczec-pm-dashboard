@@ -28,10 +28,10 @@ export const TWEAK_DEFAULTS = {
 
 export const NAV = [
   { k: "dashboard", icon: "layout-dashboard", label: "總覽" },
-  { k: "gantt",     icon: "chart-gantt",      label: "甘特圖" },
-  { k: "project",   icon: "folders",          label: "專案" },
-  { k: "kol",       icon: "users",            label: "KOL" },
-  { k: "settings",  icon: "settings",         label: "設定" },
+  { k: "gantt", icon: "align-left", label: "甘特圖" },
+  { k: "project", icon: "folders", label: "專案" },
+  { k: "kol", icon: "letter-k", label: "KOL" },
+  { k: "settings", icon: "settings", label: "設定" },
 ];
 
 export const D_SETTINGS = {

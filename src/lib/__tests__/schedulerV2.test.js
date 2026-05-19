@@ -249,27 +249,28 @@ describe('milestones', () => {
 // ── Phase 3 / 4A parallel after survey launch ─────────────────────────────────
 
 describe('phase 3 & 4A parallel after survey launch', () => {
-  it.each(scenarios)('3.1 starts after 2.19 completes [$label]', ({ surveyStart, campaignStart }) => {
+  it.each(scenarios)('3.1 starts after 2.7 completes [$label]', ({ surveyStart, campaignStart }) => {
     const p = proj('p', START, { surveyStart, campaignStart });
     const { sch } = runScheduleV2([p], settings);
-    const t219 = sch['p']['2.19'];
-    const t31  = sch['p']['3.1'];
-    expect(t219).toBeDefined();
-    expect(t31.start >= t219.end).toBe(true);
+    const t27 = sch['p']['2.7'];
+    const t31 = sch['p']['3.1'];
+    expect(t27).toBeDefined();
+    expect(t31.start >= t27.end).toBe(true);
   });
 
-  it.each(scenarios)('4A.1 starts after 2.19 completes [$label]', ({ surveyStart, campaignStart }) => {
+  it.each(scenarios)('4A.1 starts after 2.7 completes [$label]', ({ surveyStart, campaignStart }) => {
     const p = proj('p', START, { surveyStart, campaignStart });
     const { sch } = runScheduleV2([p], settings);
-    const t219 = sch['p']['2.19'];
+    const t27  = sch['p']['2.7'];
     const t4a1 = sch['p']['4A.1'];
-    expect(t4a1.start >= t219.end).toBe(true);
+    expect(t4a1.start >= t27.end).toBe(true);
   });
 
-  it.each(scenarios)('3.1 and 4A.1 start on the same day (parallel) [$label]', ({ surveyStart, campaignStart }) => {
-    const p = proj('p', START, { surveyStart, campaignStart });
-    const { sch } = runScheduleV2([p], settings);
-    expect(fmtF(sch['p']['3.1'].start)).toBe(fmtF(sch['p']['4A.1'].start));
+  it('3.1 and 4A.1 share the same predecessor (2.7) with no dependency between them', () => {
+    const t31  = BT.find(t => t.id === '3.1');
+    const t4a1 = BT.find(t => t.id === '4A.1');
+    expect(t31.d).toEqual(['2.7']);
+    expect(t4a1.d).toEqual(['2.7']);
   });
 
   it.each(scenarios)('2.20 starts at least 30 calendar days after 2.19 [$label]', ({ surveyStart, campaignStart }) => {
