@@ -73,6 +73,8 @@ export function runScheduleV2(projects, settings) {
     states.push({
       proj,
       projStart,
+      cpStart,
+      cpEnd,
       enabledIds,
       queue,
       qIdx:         0,
@@ -80,6 +82,7 @@ export function runScheduleV2(projects, settings) {
       currentTask2: null,
       done:         [],
       doneMap:      {},
+      fillUnlocked: false, // true once Phase 3 or 4A task starts in secondary slot
     });
   }
 
@@ -102,7 +105,7 @@ export function runScheduleV2(projects, settings) {
           if (s.doneMap[entry.id] || entry.hours > 0) continue;
           const pin = entry.pinnedDate || entry.pinnedStart;
           if (!pin || +pin !== +day) continue;
-          const canStart = taskCanStart(entry, s.doneMap, s.projStart, s.enabledIds, bl);
+          const canStart = taskCanStart(entry, s.doneMap, s.projStart, s.enabledIds, bl, s.cpStart, s.cpEnd);
           if (canStart === null || canStart > day) continue;
           s.done.push(makeRecord(entry, day, day, null));
           s.doneMap[entry.id] = { end: day, waitEnd: null };
@@ -131,7 +134,7 @@ export function runScheduleV2(projects, settings) {
           // skip tasks already completed (may have been processed by look-ahead)
           if (s.doneMap[entry.id]) { s.qIdx++; changed = true; continue; }
           if (entry.hours > 0) break;
-          const canStart = taskCanStart(entry, s.doneMap, s.projStart, s.enabledIds, bl);
+          const canStart = taskCanStart(entry, s.doneMap, s.projStart, s.enabledIds, bl, s.cpStart, s.cpEnd);
           if (canStart === null || canStart > day) break;
           const waitEnd = entry.w > 0 ? aWD(day, entry.w, []) : null;
           s.done.push(makeRecord(entry, day, day, waitEnd));
@@ -150,54 +153,65 @@ export function runScheduleV2(projects, settings) {
         if (!s.currentTask && s.qIdx < s.queue.length) {
           const entry = s.queue[s.qIdx];
           if (entry.hours > 0) {
-            const canStart = taskCanStart(entry, s.doneMap, s.projStart, s.enabledIds, bl);
+            const canStart = taskCanStart(entry, s.doneMap, s.projStart, s.enabledIds, bl, s.cpStart, s.cpEnd);
             if (canStart !== null && canStart <= day) {
-              s.currentTask = { entry, start: day, remaining: entry.hours };
-              s.qIdx++;
-            } else if (entry.tm === 'sv30' && canStart !== null && canStart > day) {
-              // sv30-blocked: look ahead for next ready task (special case only)
-              for (let i = s.qIdx + 1; i < s.queue.length; i++) {
-                const ahead = s.queue[i];
-                if (s.doneMap[ahead.id]) continue;
-                if (s.currentTask2?.entry.id === ahead.id) continue;
-                if (ahead.hours === 0) {
-                  // process 0-hour tasks inline so their dependents can start
-                  const cs = taskCanStart(ahead, s.doneMap, s.projStart, s.enabledIds, bl);
-                  if (cs !== null && cs <= day) {
-                    const wEnd = ahead.w > 0 ? aWD(day, ahead.w, []) : null;
-                    s.done.push(makeRecord(ahead, day, day, wEnd));
-                    s.doneMap[ahead.id] = { end: day, waitEnd: wEnd };
-                    changed = true;
-                  }
-                  continue;
-                }
-                const cs = taskCanStart(ahead, s.doneMap, s.projStart, s.enabledIds, bl);
-                if (cs === null || cs > day) break;
-                s.currentTask = { entry: ahead, start: day, remaining: ahead.hours };
-                // qIdx stays at sv30-blocked position
-                break;
+              // ns tasks must complete same day — don't start if insufficient capacity remains
+              if (!entry.ns || capacity >= entry.hours) {
+                s.currentTask = { entry, start: day, remaining: entry.hours };
+                s.qIdx++;
               }
             }
           }
         }
 
-        // currentTask2 slot: phase 3 and 4A parallel only
+        // currentTask2 slot: fill idle time when main slot is blocked, and continue
+        // Phase 3/4A chains once they've been activated
         if (!s.currentTask2) {
-          const mainPhase = s.currentTask?.entry._task.p;
-          for (const phase of ['3', '4A']) {
-            if (phase === mainPhase) continue;
-            const entry = s.queue.find(
-              (e) =>
-                e._task.p === phase &&
-                !s.doneMap[e.id] &&
-                e.hours > 0 &&
-                e.id !== s.currentTask?.entry.id
-            );
-            if (!entry) continue;
-            const cs = taskCanStart(entry, s.doneMap, s.projStart, s.enabledIds, bl);
-            if (cs !== null && cs <= day) {
-              s.currentTask2 = { entry, start: day, remaining: entry.hours };
-              break;
+          // find the first non-zero-hour undone task at or after qIdx
+          let frontTask = null;
+          let frontCS = null;
+          for (let i = s.qIdx; i < s.queue.length; i++) {
+            const e = s.queue[i];
+            if (s.doneMap[e.id] || e.hours === 0) continue;
+            frontTask = e;
+            frontCS = taskCanStart(e, s.doneMap, s.projStart, s.enabledIds, bl, s.cpStart, s.cpEnd);
+            break;
+          }
+          const mainBlocked = frontTask !== null && frontCS !== null && frontCS > day;
+
+          // Run fill when blocked (standard), or continue Phase 3/4A chains already started
+          if (mainBlocked || s.fillUnlocked) {
+            for (const entry of s.queue) {
+              if (s.doneMap[entry.id]) continue;
+              if (entry.id === frontTask?.id) continue;
+              if (s.currentTask?.entry.id === entry.id) continue;
+
+              // When not blocked but fill chain is ongoing: only continue Phase 3/4A
+              if (!mainBlocked && s.fillUnlocked) {
+                if (entry._task.p !== '3' && entry._task.p !== '4A') continue;
+              }
+
+              if (entry.hours === 0) {
+                // inline-process 0-hour tasks so their dependents can start counting
+                const cs = taskCanStart(entry, s.doneMap, s.projStart, s.enabledIds, bl, s.cpStart, s.cpEnd);
+                if (cs !== null && cs <= day) {
+                  const wEnd = entry.w > 0 ? aWD(day, entry.w, []) : null;
+                  s.done.push(makeRecord(entry, day, day, wEnd));
+                  s.doneMap[entry.id] = { end: day, waitEnd: wEnd };
+                  changed = true;
+                }
+                continue;
+              }
+
+              const cs = taskCanStart(entry, s.doneMap, s.projStart, s.enabledIds, bl, s.cpStart, s.cpEnd);
+              if (cs !== null && cs <= day) {
+                s.currentTask2 = { entry, start: day, remaining: entry.hours };
+                // Unlock Phase 3/4A chain continuation once activated
+                if (entry._task.p === '3' || entry._task.p === '4A') {
+                  s.fillUnlocked = true;
+                }
+                break;
+              }
             }
           }
         }
@@ -214,6 +228,8 @@ export function runScheduleV2(projects, settings) {
           // ns tasks claim capacity first to avoid being split across days
           if (a.ct.entry.ns && !b.ct.entry.ns) return -1;
           if (!a.ct.entry.ns && b.ct.entry.ns) return 1;
+          // within ns group: smaller remaining hours first so short tasks complete same day
+          if (a.ct.entry.ns && b.ct.entry.ns) return a.ct.remaining - b.ct.remaining;
           const da = a.ct.entry.hardDeadline;
           const db = b.ct.entry.hardDeadline;
           if (!da && !db) return 0;
@@ -248,7 +264,7 @@ export function runScheduleV2(projects, settings) {
   return buildResult(states, projects, bl);
 }
 
-function taskCanStart(entry, doneMap, projStart, enabledIds, bl) {
+function taskCanStart(entry, doneMap, projStart, enabledIds, bl, cpStart, cpEnd) {
   let canStart = projStart;
   for (const depId of (entry.d || [])) {
     if (!enabledIds.has(depId)) continue;
@@ -258,9 +274,24 @@ function taskCanStart(entry, doneMap, projStart, enabledIds, bl) {
     if (depEff > canStart) canStart = depEff;
   }
   if (entry.tm === 'sv30') {
-    if (!doneMap['2.19']) return null;
-    const sv30 = nWD(addD(doneMap['2.19'].end, 30), bl);
+    if (!doneMap['2.20']) return null;
+    const sv30 = nWD(addD(doneMap['2.20'].end, 30), bl);
     if (sv30 > canStart) canStart = sv30;
+  }
+  // Phases 5, 6, 7, 8, 9 cannot start before 問卷開跑 (2.20) is done
+  if (['5', '6', '7', '8', '9'].includes(entry._task.p) && enabledIds.has('2.20')) {
+    if (!doneMap['2.20']) return null;
+    if (doneMap['2.20'].end > canStart) canStart = doneMap['2.20'].end;
+  }
+  // Phase 8 cannot start before campaign launch (cpStart)
+  if (entry._task.p === '8' && cpStart) {
+    const ms8 = nWD(cpStart, bl);
+    if (ms8 > canStart) canStart = ms8;
+  }
+  // Phase 9 cannot start before campaign end (cpEnd)
+  if (entry._task.p === '9' && cpEnd) {
+    const ms9 = nWD(addD(cpEnd, 1), bl);
+    if (ms9 > canStart) canStart = ms9;
   }
   if (entry.pinnedDate  && entry.pinnedDate  > canStart) canStart = entry.pinnedDate;
   if (entry.pinnedStart && entry.pinnedStart > canStart) canStart = entry.pinnedStart;
@@ -292,10 +323,10 @@ function buildResult(states, projects, bl) {
     let sv219End = null;
     for (const rec of s.done) {
       sch[pid][rec.id] = rec;
-      if (rec.id === '2.19') sv219End = rec.end;
+      if (rec.id === '2.20') sv219End = rec.end;
     }
 
-    // eSv: next WD after task 2.19 (問卷開跑) ends
+    // eSv: next WD after task 2.20 (問卷開跑) ends
     const eSv = sv219End ? nWD(addD(sv219End, 1), bl) : null;
 
     // eCp: (surveyEnd || surveyStart+30 || eSv+30) + 5 WD

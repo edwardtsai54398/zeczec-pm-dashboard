@@ -100,7 +100,7 @@ function TaskEditModal({ state, projects, data, onSave, onClose }) {
   );
 }
 
-const WEEKEND_BAR_TASKS = new Set(['7.3', '7.5', '7.7', '7.8', '7.10', '7.12', '7.14', '7.16', '7.18', '7.20']);
+const WEEKEND_BAR_TASKS = new Set(['7.3', '7.5', '7.7', '7.8', '7.10', '8.2', '8.4', '8.6', '8.8', '8.10']);
 
 const LABEL_W = 240;
 const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];

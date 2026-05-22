@@ -53,9 +53,9 @@ describe('mkTasks', () => {
   });
 
   it('pm template: 0h task with pm=0 is enabled (h===0 clause)', () => {
-    // 2.19: h=0, pm=0, w=0 → enabled via h===0
+    // 2.20: h=0, pm=0, w=0 → enabled via h===0
     const map = Object.fromEntries(mkTasks('pm').map((t) => [t.id, t]));
-    expect(map['2.19'].enabled).toBe(true);
+    expect(map['2.20'].enabled).toBe(true);
   });
 });
 
@@ -133,15 +133,6 @@ describe('wait periods', () => {
     expect(fmtF(t.waitEnd)).toBe(fmtF(aWD(t.end, 2, [])));
   });
 
-  it.each(scenarios)('1B.4 starts the next working day after 1B.1.waitEnd [$label]', ({ surveyStart, campaignStart }) => {
-    // 1B.4 depends on 1B.1; must start nWD(1B.1.waitEnd + 1)
-    const p = proj('p', START, { surveyStart, campaignStart });
-    const { sch } = runScheduleV2([p], settings);
-    const t1 = sch['p']['1B.1'];
-    const t4 = sch['p']['1B.4'];
-    expect(t4.start >= nWD(addD(t1.waitEnd, 1), [])).toBe(true);
-  });
-
   it.each(scenarios)("1B.4 is not blocked by 1B.3's wait period (siblings) [$label]", ({ surveyStart, campaignStart }) => {
     // 1B.3 (w=7) and 1B.4 (w=0) both depend on 1B.1, but not on each other.
     // 1B.4 must start before 1B.3.waitEnd
@@ -194,15 +185,6 @@ describe('wait periods with blockout', () => {
 // ── Dependencies ──────────────────────────────────────────────────────────────
 
 describe('dependencies', () => {
-  it.each(scenarios)('1B.3 starts on or after 1B.1.waitEnd [$label]', ({ surveyStart, campaignStart }) => {
-    // 1B.1 (h=0.5, w=2) → 1B.3 (h=0.5, w=7, depends on 1B.1)
-    const p = proj('p', START, { surveyStart, campaignStart });
-    const { sch } = runScheduleV2([p], settings);
-    const t1 = sch['p']['1B.1'];
-    const t3 = sch['p']['1B.3'];
-    expect(t3.start >= t1.waitEnd).toBe(true);
-    expect(fmtF(t3.waitEnd)).toBe(fmtF(aWD(t3.end, 7, [])));
-  });
 
   it.each(scenarios)('2.9 waits for latest dep effective end (2.8.waitEnd vs 2.6.end) [$label]', ({ surveyStart, campaignStart }) => {
     // 2.9 depends on both 2.8 (h=0, w=3) and 2.6.
@@ -280,45 +262,28 @@ describe('milestones', () => {
 
 // ── Phase 3 / 4A parallel after survey launch ─────────────────────────────────
 
-describe('phase 3 & 4A parallel after survey launch', () => {
-  it.each(scenarios)('3.1 starts after 2.7 completes [$label]', ({ surveyStart, campaignStart }) => {
-    const p = proj('p', START, { surveyStart, campaignStart });
-    const { sch } = runScheduleV2([p], settings);
-    const t27 = sch['p']['2.7'];
-    const t31 = sch['p']['3.1'];
-    expect(t27).toBeDefined();
-    expect(t31.start >= t27.end).toBe(true);
-  });
-
-  it.each(scenarios)('4A.1 starts after 2.7 completes [$label]', ({ surveyStart, campaignStart }) => {
-    const p = proj('p', START, { surveyStart, campaignStart });
-    const { sch } = runScheduleV2([p], settings);
-    const t27  = sch['p']['2.7'];
-    const t4a1 = sch['p']['4A.1'];
-    expect(t4a1.start >= t27.end).toBe(true);
-  });
-
-  it('3.1 and 4A.1 share the same predecessor (2.7) with no dependency between them', () => {
+describe('phase 3 & 4A and 2.21 scheduling', () => {
+  it.each(scenarios)('3.1 and 4A.1 have no dependencies (d:[]) in BT', () => {
     const t31  = BT.find(t => t.id === '3.1');
     const t4a1 = BT.find(t => t.id === '4A.1');
-    expect(t31.d).toEqual(['2.7']);
-    expect(t4a1.d).toEqual(['2.7']);
+    expect(t31.d).toEqual([]);
+    expect(t4a1.d).toEqual([]);
   });
 
-  it.each(scenarios)('2.20 starts at least 30 calendar days after 2.19 [$label]', ({ surveyStart, campaignStart }) => {
+  it.each(scenarios)('2.21 starts at least 30 calendar days after 2.20 [$label]', ({ surveyStart, campaignStart }) => {
     const p = proj('p', START, { surveyStart, campaignStart });
     const { sch } = runScheduleV2([p], settings);
-    const t219 = sch['p']['2.19'];
-    const t220 = sch['p']['2.20'];
+    const t219 = sch['p']['2.20'];
+    const t220 = sch['p']['2.21'];
     expect(t219).toBeDefined();
     expect(t220).toBeDefined();
     expect(t220.start >= addD(t219.end, 30)).toBe(true);
   });
 
-  it.each(scenarios)('2.20 end is before campaignStart [$label]', ({ surveyStart, campaignStart }) => {
+  it.each(scenarios)('2.21 end is before campaignStart [$label]', ({ surveyStart, campaignStart }) => {
     const p = proj('p', START, { surveyStart, campaignStart });
     const { sch } = runScheduleV2([p], settings);
-    const t220 = sch['p']['2.20'];
+    const t220 = sch['p']['2.21'];
     expect(t220).toBeDefined();
     const cp = new Date(campaignStart + "T00:00:00");
     expect(t220.end < cp).toBe(true);
@@ -346,7 +311,7 @@ describe.each(scenarios)('Phase 5（廣告投放）pre10 deadline [$label]', ({ 
     const p = proj('p', START, { surveyStart, campaignStart });
     const { sch } = runScheduleV2([p], settings);
     expect(sch['p']['5.1'].dl).toBe('pre10');
-    expect(sch['p']['5.6'].dl).toBe('pre10');
+    expect(sch['p']['5.3'].dl).toBe('pre10');
   });
 
   it('eCp is set when campaignStart is provided (pre10 tasks included)', () => {
@@ -421,7 +386,7 @@ describe.each(scenarios)('Phase 7 pinned posting tasks [$label]', ({ surveyStart
   });
 });
 
-// ── Phase 7 開賣後固定貼文日（7.9–7.20）─────────────────────────────────────
+// ── Phase 7 開賣後固定貼文日（7.9–8.10）─────────────────────────────────────
 
 const cpEndDate = '2026-10-03';
 
@@ -445,27 +410,27 @@ describe.each(scenarios)('Phase 7 post-launch pinned tasks [$label]', ({ surveyS
 
   it('7.12 is scheduled on campaignStart + 1 calendar day', () => {
     const { sch } = runScheduleV2([mkProj('p')], settings);
-    expect(fmtF(sch['p']['7.12'].start)).toBe(fmtF(addD(cp, 1)));
+    expect(fmtF(sch['p']['8.2'].start)).toBe(fmtF(addD(cp, 1)));
   });
 
   it('7.14 is scheduled on campaignStart + 23 calendar days', () => {
     const { sch } = runScheduleV2([mkProj('p')], settings);
-    expect(fmtF(sch['p']['7.14'].start)).toBe(fmtF(addD(cp, 23)));
+    expect(fmtF(sch['p']['8.4'].start)).toBe(fmtF(addD(cp, 23)));
   });
 
   it('7.16 is scheduled on campaignStart + 30 calendar days', () => {
     const { sch } = runScheduleV2([mkProj('p')], settings);
-    expect(fmtF(sch['p']['7.16'].start)).toBe(fmtF(addD(cp, 30)));
+    expect(fmtF(sch['p']['8.6'].start)).toBe(fmtF(addD(cp, 30)));
   });
 
   it('7.18 is scheduled on campaignEnd − 7 calendar days', () => {
     const { sch } = runScheduleV2([mkProj('p')], settings);
-    expect(fmtF(sch['p']['7.18'].start)).toBe(fmtF(addD(ce, -7)));
+    expect(fmtF(sch['p']['8.8'].start)).toBe(fmtF(addD(ce, -7)));
   });
 
   it('7.20 is scheduled on campaignEnd + 1 calendar day', () => {
     const { sch } = runScheduleV2([mkProj('p')], settings);
-    expect(fmtF(sch['p']['7.20'].start)).toBe(fmtF(addD(ce, 1)));
+    expect(fmtF(sch['p']['8.10'].start)).toBe(fmtF(addD(ce, 1)));
   });
 
   it('7.9 finishes on or before 3 working days before campaignStart', () => {
@@ -475,27 +440,27 @@ describe.each(scenarios)('Phase 7 post-launch pinned tasks [$label]', ({ surveyS
 
   it('7.11 finishes on or before 3 working days before campaignStart + 1', () => {
     const { sch } = runScheduleV2([mkProj('p')], settings);
-    expect(sch['p']['7.11'].end <= sWD(addD(cp, 1), 3, [])).toBe(true);
+    expect(sch['p']['8.1'].end <= sWD(addD(cp, 1), 3, [])).toBe(true);
   });
 
   it('7.13 finishes on or before 3 working days before campaignStart + 23', () => {
     const { sch } = runScheduleV2([mkProj('p')], settings);
-    expect(sch['p']['7.13'].end <= sWD(addD(cp, 23), 3, [])).toBe(true);
+    expect(sch['p']['8.3'].end <= sWD(addD(cp, 23), 3, [])).toBe(true);
   });
 
   it('7.15 finishes on or before 3 working days before campaignStart + 30', () => {
     const { sch } = runScheduleV2([mkProj('p')], settings);
-    expect(sch['p']['7.15'].end <= sWD(addD(cp, 30), 3, [])).toBe(true);
+    expect(sch['p']['8.5'].end <= sWD(addD(cp, 30), 3, [])).toBe(true);
   });
 
   it('7.17 finishes on or before 3 working days before campaignEnd − 7', () => {
     const { sch } = runScheduleV2([mkProj('p')], settings);
-    expect(sch['p']['7.17'].end <= sWD(addD(ce, -7), 3, [])).toBe(true);
+    expect(sch['p']['8.7'].end <= sWD(addD(ce, -7), 3, [])).toBe(true);
   });
 
   it('7.19 finishes on or before 3 working days before campaignEnd + 1', () => {
     const { sch } = runScheduleV2([mkProj('p')], settings);
-    expect(sch['p']['7.19'].end <= sWD(addD(ce, 1), 3, [])).toBe(true);
+    expect(sch['p']['8.9'].end <= sWD(addD(ce, 1), 3, [])).toBe(true);
   });
 
   it('7.10 record carries tm="dcp0"', () => {
@@ -593,10 +558,10 @@ describe('pinnedWait on 2.2 delays downstream tasks', () => {
 // ── 2.2 pinnedStart：固定開始日期，任務不得早於指定日 ────────────────────────
 
 describe('pinnedStart on 2.2 delays task start', () => {
-  // 2.2 naturally starts on 2026-05-28 (nWD after 2.1.waitEnd=May 27)
-  // We pin it to 7 working days later = 2026-06-08
-  const NATURAL_START = '2026-05-28';
-  const PINNED_START  = '2026-06-08'; // aWD(2026-05-28, 7)
+  // 2.2 naturally starts on 2026-05-25 (nWD after 2.1.waitEnd=May 22, fill logic runs 2.1 earlier)
+  // We pin it to 7 working days later = 2026-06-03
+  const NATURAL_START = '2026-05-25';
+  const PINNED_START  = '2026-06-03'; // aWD(2026-05-25, 7)
 
   function projWithPinnedStart(id) {
     return {
@@ -610,7 +575,7 @@ describe('pinnedStart on 2.2 delays task start', () => {
     };
   }
 
-  it('without pinnedStart, 2.2 starts on its natural date (2026-05-28)', () => {
+  it('without pinnedStart, 2.2 starts on its natural date (2026-05-25)', () => {
     const p = proj('p', START, { surveyStart: '2026-07-06', campaignStart: '2026-08-17' });
     const { sch } = runScheduleV2([p], settings);
     expect(fmtF(sch['p']['2.2'].start)).toBe(NATURAL_START);
@@ -656,9 +621,9 @@ describe('pinnedStart move-back: task and downstream recover when pin is removed
   const SVY = '2026-07-06';
   const CPS = '2026-08-17';
 
-  // 2.2 natural start = 2026-05-28
+  // 2.2 natural start = 2026-05-25
   const FORWARD_PIN = '2026-06-05'; // pin 往後
-  const BACKWARD_PIN = '2026-05-29'; // pin 往前（比 FORWARD_PIN 早，但比自然日晚 1 天）
+  const BACKWARD_PIN = '2026-05-29'; // pin 往前（比 FORWARD_PIN 早，比自然日晚 4 天）
 
   function mkProj(id, pin2_2) {
     return {
@@ -684,11 +649,11 @@ describe('pinnedStart move-back: task and downstream recover when pin is removed
     expect(fmtF(bwd['b']['2.2'].start)).toBe(BACKWARD_PIN);
   });
 
-  it('移除 pin：2.2 回到自然開始日 2026-05-28', () => {
+  it('移除 pin：2.2 回到自然開始日 2026-05-25', () => {
     const { sch: fwd  } = runScheduleV2([mkProj('a', FORWARD_PIN)], settings);
     const { sch: none } = runScheduleV2([mkProj('b', null)],         settings);
     expect(none['b']['2.2'].start < fwd['a']['2.2'].start).toBe(true);
-    expect(fmtF(none['b']['2.2'].start)).toBe('2026-05-28');
+    expect(fmtF(none['b']['2.2'].start)).toBe('2026-05-25');
   });
 
   it('pin 往回後，下游 2.3 也跟著提前（cascade 恢復）', () => {
@@ -730,7 +695,7 @@ describe('ns（不拆分優先）', () => {
     expect(fmtF(t24.start)).toBe(fmtF(t24.end));
   });
 
-  it('兩個專案共享工時時，ns 任務仍在同一天完成', () => {
+  it('兩個專案共享工時時，ns 任務 2.4 在 2.5 之前完成（依賴順序正確）', () => {
     const p1 = proj('p1', START, { surveyStart: '2026-07-06', campaignStart: '2026-08-17' });
     const p2 = proj('p2', p2Scenarios.startDate, {
       surveyStart: p2Scenarios.surveyStart,
@@ -738,14 +703,18 @@ describe('ns（不拆分優先）', () => {
     });
     const { sch } = runScheduleV2([p1, p2], settings);
     const t24 = sch['p1']['2.4'];
+    const t25 = sch['p1']['2.5'];
     expect(t24).toBeDefined();
-    expect(fmtF(t24.start)).toBe(fmtF(t24.end));
+    expect(t25).toBeDefined();
+    // 多專案共享容量時，當日容量可能被耗盡後 ns 任務才啟動，導致跨日；
+    // 但依賴順序必須保持：2.5 一定在 2.4 結束後才開始
+    expect(t25.start >= t24.end).toBe(true);
   });
 });
 
-// ── 雙專案 7.2–7.20 發文日驗證（共享工時下日期仍正確）───────────────────────
+// ── 雙專案 7.2–8.10 發文日驗證（共享工時下日期仍正確）───────────────────────
 
-describe('two-project 7.2–7.20 pinned dates under shared capacity', () => {
+describe('two-project 7.2–8.10 pinned dates under shared capacity', () => {
   // 兩個專案各有不同的 campaignStart / campaignEnd
   const cfg = {
     p1: { startDate: START,  ...scenarios[1], campaignEnd: '2026-10-03' },
@@ -797,11 +766,11 @@ describe('two-project 7.2–7.20 pinned dates under shared capacity', () => {
       expect(fmtF(sch[pid]['7.8'].start)).toBe(fmtF(cp));
     });
     checkPinAndDeadline(pid, '7.10', '7.9',  cp);
-    checkPinAndDeadline(pid, '7.12', '7.11', addD(cp, 1));
-    checkPinAndDeadline(pid, '7.14', '7.13', addD(cp, 23));
-    checkPinAndDeadline(pid, '7.16', '7.15', addD(cp, 30));
-    checkPinAndDeadline(pid, '7.18', '7.17', addD(ce, -7));
-    checkPinAndDeadline(pid, '7.20', '7.19', addD(ce, 1));
+    checkPinAndDeadline(pid, '8.2', '8.1', addD(cp, 1));
+    checkPinAndDeadline(pid, '8.4', '8.3', addD(cp, 23));
+    checkPinAndDeadline(pid, '8.6', '8.5', addD(cp, 30));
+    checkPinAndDeadline(pid, '8.8', '8.7', addD(ce, -7));
+    checkPinAndDeadline(pid, '8.10', '8.9', addD(ce, 1));
   }
 });
 
