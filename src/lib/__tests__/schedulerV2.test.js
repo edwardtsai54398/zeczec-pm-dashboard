@@ -788,6 +788,48 @@ describe('two-project 7.2–8.10 pinned dates under shared capacity', () => {
   }
 });
 
+// ── pinnedStart on 4A.1（使用者釘選流程）────────────────────────────────────────
+
+describe('pinnedStart on 4A.1: 使用者雙擊設定固定開始日', () => {
+  // projStart = 2026-05-19（tight 情境）
+  // 4A.1 沒有 minStart、沒有依賴，但在 queue 中排在 index 34，前面任務佔滿容量
+  // → 自然開始 = 2026-05-26（容量競爭延後）
+  // 使用者釘選 2026-05-20 → 應直接在 2026-05-20 排定
+  const PINNED = '2026-05-20';
+
+  function projWithPin4A1(id) {
+    return {
+      id, name: id, template: 'full',
+      startDate: START, // '2026-05-19'
+      surveyStart: scenarios[0].surveyStart,   // tight
+      campaignStart: scenarios[0].campaignStart,
+      tasks: BT.map((bt) => ({
+        id: bt.id, enabled: true,
+        ...(bt.id === '4A.1' ? { pinnedStart: PINNED } : {}),
+      })),
+    };
+  }
+
+  it('沒有 pinnedStart 時，4A.1 自然開始日為 2026-05-26（容量競爭延後）', () => {
+    const p = proj('p', START, { surveyStart: scenarios[0].surveyStart, campaignStart: scenarios[0].campaignStart });
+    const { sch } = runScheduleV2([p], settings);
+    expect(fmtF(sch['p']['4A.1'].start)).toBe('2026-05-26');
+  });
+
+  it('設定 pinnedStart=2026-05-20 後，4A.1 應從 2026-05-20 開始', () => {
+    const { sch } = runScheduleV2([projWithPin4A1('p')], settings);
+    expect(fmtF(sch['p']['4A.1'].start)).toBe(PINNED);
+  });
+
+  it('pinnedStart 不影響無依賴關係的其他任務（如 1B.1）', () => {
+    const pBase = proj('base', START, { surveyStart: scenarios[0].surveyStart, campaignStart: scenarios[0].campaignStart });
+    const pPin  = projWithPin4A1('pin');
+    const { sch: base } = runScheduleV2([pBase], settings);
+    const { sch: pin  } = runScheduleV2([pPin],  settings);
+    expect(fmtF(pin['pin']['1B.1'].start)).toBe(fmtF(base['base']['1B.1'].start));
+  });
+});
+
 // ── 情境：2026-05-20 開始 + Jun10-16 請假 ─────────────────────────────────────
 
 describe('scenario: startDate 2026-05-20, Jun10-16 blockout', () => {

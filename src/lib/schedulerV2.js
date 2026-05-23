@@ -112,22 +112,22 @@ export function runScheduleV2(projects, settings) {
 
   // 從所有專案的第一天開始找任務
   for (let d = 0; d < MAX_DAYS; d++) {
-    if (isWeekend(day) || isBlackout(day, blackouts)) {
-      // pinned tasks trigger on their exact calendar date, even on weekends/blackouts
-      // 每個專案的未排程任務中，找被使用者釘選和系統釘選的任務，任務加進已排程清單done, doneMap
-      for (const projState of projStates) {
-        for (let i = 0; i < projState.queue.length; i++) {
-          const entry = projState.queue[i];
-          if (projState.doneMap[entry.id]) continue;
-          const pin = entry.pinnedDate || entry.pinnedStart;
-          if (!pin || +pin !== +day) continue;
-          const canStart = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.svStart, projState.svEnd, projState.cpStart, projState.cpEnd);
-          if (canStart === null || canStart > day) continue;
-          const waitEnd = entry.w > 0 ? addWorkDays(day, entry.w, []) : null;
-          projState.done.push(makeRecord(entry, day, day, waitEnd));
-          projState.doneMap[entry.id] = { end: day, waitEnd };
-        }
+    // pinned tasks（系統釘選 pinnedDate 或使用者釘選 pinnedStart）在指定日期直接佔位，不受工作日限制
+    for (const projState of projStates) {
+      for (let i = 0; i < projState.queue.length; i++) {
+        const entry = projState.queue[i];
+        if (projState.doneMap[entry.id]) continue;
+        const pin = entry.pinnedDate || entry.pinnedStart;
+        if (!pin || +pin !== +day) continue;
+        const canStart = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.svStart, projState.svEnd, projState.cpStart, projState.cpEnd);
+        if (canStart === null || canStart > day) continue;
+        const waitEnd = entry.w > 0 ? addWorkDays(day, entry.w, []) : null;
+        projState.done.push(makeRecord(entry, day, day, waitEnd));
+        projState.doneMap[entry.id] = { end: day, waitEnd };
       }
+    }
+
+    if (isWeekend(day) || isBlackout(day, blackouts)) {
       day = addDays(day, 1);
       continue;
     }
