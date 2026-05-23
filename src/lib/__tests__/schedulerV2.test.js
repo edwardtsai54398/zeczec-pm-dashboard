@@ -77,9 +77,9 @@ describe('basic scheduling', () => {
 
   it('startDate inside blackout advances past blackout', () => {
     // Block Tue–Fri; projStart advances to following Monday 2026-05-25
-    const bl = [{ start: START, end: '2026-05-22' }];
+    const blackouts = [{ start: START, end: '2026-05-22' }];
     const p = proj('p', START);
-    const { sch } = runScheduleV2([p], { ...settings, blackouts: bl });
+    const { sch } = runScheduleV2([p], { ...settings, blackouts });
     expect(fmtF(sch['p']['1B.1'].start)).toBe('2026-05-25');
   });
 

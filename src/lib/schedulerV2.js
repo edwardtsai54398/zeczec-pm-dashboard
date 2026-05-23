@@ -1,5 +1,13 @@
 import { BT } from './tasks.js';
-import { pD, addD, nWD, aWD, sWD, isWE, isBO } from './dateUtils.js';
+import {
+  pD as parseDate,
+  addD as addDays,
+  nWD as nextWorkDay,
+  aWD as addWorkDays,
+  sWD as subWorkDays,
+  isWE as isWeekend,
+  isBO as isBlackout,
+} from './dateUtils.js';
 
 export function mkTasks(tpl) {
   return BT.map((t) => ({
@@ -10,35 +18,35 @@ export function mkTasks(tpl) {
 
 export function runScheduleV2(projects, settings) {
 
-  const bl = settings?.blackouts || [];
-  const hpd = settings?.hoursPerDay || 8;
+  const blackouts = settings?.blackouts || [];
+  const hoursPerDay = settings?.hoursPerDay || 8;
 
-  const states = [];
+  const projStates = [];
   for (const proj of projects) {
-    const rawStart = pD(proj.startDate);
+    const rawStart = parseDate(proj.startDate);
     if (!rawStart) continue;
 
-    const projStart = nWD(rawStart, bl);
+    const projStart = nextWorkDay(rawStart, blackouts);
     const isPM = proj.template === 'pm';
     const projTaskMap = Object.fromEntries((proj.tasks || []).map((t) => [t.id, t]));
     const enabledIds = new Set((proj.tasks || []).filter((t) => t.enabled).map((t) => t.id));
 
-    const cpStart = pD(proj.campaignStart);
-    const cpEnd   = pD(proj.campaignEnd);
+    const cpStart = parseDate(proj.campaignStart);
+    const cpEnd   = parseDate(proj.campaignEnd);
     const preNDates = {
       ...(cpStart ? {
-        pre7:  addD(cpStart, -7),
-        pre3:  addD(cpStart, -3),
-        pre1:  addD(cpStart, -1),
+        pre7:  addDays(cpStart, -7),
+        pre3:  addDays(cpStart, -3),
+        pre1:  addDays(cpStart, -1),
         dcp0:  cpStart,
-        dcp1:  addD(cpStart, 1),
-        dcp23: addD(cpStart, 23),
-        dcp30: addD(cpStart, 30),
+        dcp1:  addDays(cpStart, 1),
+        dcp23: addDays(cpStart, 23),
+        dcp30: addDays(cpStart, 30),
       } : {}),
       ...(cpEnd ? {
-        pre7e: addD(cpEnd, -7),
-        post1: addD(cpEnd, 1),
-        post7: aWD(cpEnd, 7, bl),
+        pre7e: addDays(cpEnd, -7),
+        post1: addDays(cpEnd, 1),
+        post7: addWorkDays(cpEnd, 7, blackouts),
       } : {}),
     };
 
@@ -58,19 +66,21 @@ export function runScheduleV2(projects, settings) {
           sp:         t.sp || 0,
           ns:         t.ns || false,
           d:          t.d || [],
+          // pinnedDate：任務模板定義的時間錨點（如 pre7、dcp0），由活動日期推算出固定日期，任務不得早於此日開始
           pinnedDate:  t.tm && preNDates[t.tm] ? preNDates[t.tm] : null,
-          pinnedStart: pt.pinnedStart ? pD(pt.pinnedStart) : null,
+          // pinnedStart：使用者在專案設定中手動指定的最早開始日，優先級高於排程自動推算
+          pinnedStart: pt.pinnedStart ? parseDate(pt.pinnedStart) : null,
           hardDeadline:
             (t.tmDl && preNDates[t.tmDl])
-              ? sWD(preNDates[t.tmDl], 3, bl)
-              : t.dl === 'sv'    ? pD(proj.surveyStart)
-              : t.dl === 'cp'    ? (t.dlb && cpStart ? sWD(cpStart, t.dlb, bl) : cpStart)
-              : t.dl === 'pre10' ? (cpStart ? sWD(cpStart, 10, bl) : null)
+              ? subWorkDays(preNDates[t.tmDl], 3, blackouts)
+              : t.dl === 'sv'    ? parseDate(proj.surveyStart)
+              : t.dl === 'cp'    ? (t.dlb && cpStart ? subWorkDays(cpStart, t.dlb, blackouts) : cpStart)
+              : t.dl === 'pre10' ? (cpStart ? subWorkDays(cpStart, 10, blackouts) : null)
               : null,
         };
       });
 
-    states.push({
+    projStates.push({
       proj,
       projStart,
       cpStart,
@@ -86,79 +96,79 @@ export function runScheduleV2(projects, settings) {
     });
   }
 
-  if (states.length === 0) return buildResult(states, projects, bl);
+  if (projStates.length === 0) return buildResult(projStates, projects, blackouts);
 
-  const simStart = states.reduce(
-    (min, s) => (s.projStart < min ? s.projStart : min),
-    states[0].projStart,
+  const simStart = projStates.reduce(
+    (min, projState) => (projState.projStart < min ? projState.projStart : min),
+    projStates[0].projStart,
   );
 
   let day = new Date(simStart);
   const MAX_DAYS = 1500;
 
   for (let d = 0; d < MAX_DAYS; d++) {
-    if (isWE(day) || isBO(day, bl)) {
+    if (isWeekend(day) || isBlackout(day, blackouts)) {
       // pinned 0-hour tasks (7.3/7.5/7.7) trigger on their exact calendar date, even on weekends
-      for (const s of states) {
-        for (let i = 0; i < s.queue.length; i++) {
-          const entry = s.queue[i];
-          if (s.doneMap[entry.id] || entry.hours > 0) continue;
+      for (const projState of projStates) {
+        for (let i = 0; i < projState.queue.length; i++) {
+          const entry = projState.queue[i];
+          if (projState.doneMap[entry.id] || entry.hours > 0) continue;
           const pin = entry.pinnedDate || entry.pinnedStart;
           if (!pin || +pin !== +day) continue;
-          const canStart = taskCanStart(entry, s.doneMap, s.projStart, s.enabledIds, bl, s.cpStart, s.cpEnd);
+          const canStart = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.cpStart, projState.cpEnd);
           if (canStart === null || canStart > day) continue;
-          s.done.push(makeRecord(entry, day, day, null));
-          s.doneMap[entry.id] = { end: day, waitEnd: null };
+          projState.done.push(makeRecord(entry, day, day, null));
+          projState.doneMap[entry.id] = { end: day, waitEnd: null };
         }
       }
-      day = addD(day, 1);
+      day = addDays(day, 1);
       continue;
     }
 
-    const anyRemaining = states.some(
-      (s) => s.qIdx < s.queue.length || s.currentTask || s.currentTask2
+    const anyRemaining = projStates.some(
+      (projState) => projState.qIdx < projState.queue.length || projState.currentTask || projState.currentTask2
     );
     if (!anyRemaining) break;
 
-    let capacity = hpd;
-    let changed = true;
+    let capacity = hoursPerDay;
+    let madeProgress = true; // 只要有任何任務推進，就再跑一輪；直到無任何進展才停止（fixpoint）
     let safety = 0;
 
-    while (changed && safety++ < 400) {
-      changed = false;
+    while (madeProgress && safety++ < 400) {
+      madeProgress = false;
 
       // 2a: advance 0-hour tasks (consume no capacity)
-      for (const s of states) {
-        while (s.qIdx < s.queue.length && !s.currentTask) {
-          const entry = s.queue[s.qIdx];
+      for (const projState of projStates) {
+        while (projState.qIdx < projState.queue.length && !projState.currentTask) {
+          const entry = projState.queue[projState.qIdx];
           // skip tasks already completed (may have been processed by look-ahead)
-          if (s.doneMap[entry.id]) { s.qIdx++; changed = true; continue; }
+          if (projState.doneMap[entry.id]) { projState.qIdx++; madeProgress = true; continue; }
           if (entry.hours > 0) break;
-          const canStart = taskCanStart(entry, s.doneMap, s.projStart, s.enabledIds, bl, s.cpStart, s.cpEnd);
+          const canStart = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.cpStart, projState.cpEnd);
           if (canStart === null || canStart > day) break;
-          const waitEnd = entry.w > 0 ? aWD(day, entry.w, []) : null;
-          s.done.push(makeRecord(entry, day, day, waitEnd));
-          s.doneMap[entry.id] = { end: day, waitEnd };
-          s.qIdx++;
-          changed = true;
+          const waitEnd = entry.w > 0 ? addWorkDays(day, entry.w, []) : null;
+          projState.done.push(makeRecord(entry, day, day, waitEnd));
+          projState.doneMap[entry.id] = { end: day, waitEnd };
+          projState.qIdx++;
+          madeProgress = true;
         }
       }
 
       // 2b: start next non-zero task(s) per project
-      for (const s of states) {
+      for (const projState of projStates) {
         // advance qIdx past tasks already completed out-of-order
-        while (s.qIdx < s.queue.length && s.doneMap[s.queue[s.qIdx].id]) s.qIdx++;
+        while (projState.qIdx < projState.queue.length && projState.doneMap[projState.queue[projState.qIdx].id]) projState.qIdx++;
 
         // main slot
-        if (!s.currentTask && s.qIdx < s.queue.length) {
-          const entry = s.queue[s.qIdx];
+        if (!projState.currentTask && projState.qIdx < projState.queue.length) {
+          const entry = projState.queue[projState.qIdx];
           if (entry.hours > 0) {
-            const canStart = taskCanStart(entry, s.doneMap, s.projStart, s.enabledIds, bl, s.cpStart, s.cpEnd);
+            const canStart = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.cpStart, projState.cpEnd);
             if (canStart !== null && canStart <= day) {
               // ns tasks must complete same day — don't start if insufficient capacity remains
               if (!entry.ns || capacity >= entry.hours) {
-                s.currentTask = { entry, start: day, remaining: entry.hours };
-                s.qIdx++;
+                projState.currentTask = { entry, start: day, remaining: entry.hours };
+                projState.qIdx++;
               }
             }
           }
@@ -166,49 +176,49 @@ export function runScheduleV2(projects, settings) {
 
         // currentTask2 slot: fill idle time when main slot is blocked, and continue
         // Phase 3/4A chains once they've been activated
-        if (!s.currentTask2) {
+        if (!projState.currentTask2) {
           // find the first non-zero-hour undone task at or after qIdx
           let frontTask = null;
           let frontCS = null;
-          for (let i = s.qIdx; i < s.queue.length; i++) {
-            const e = s.queue[i];
-            if (s.doneMap[e.id] || e.hours === 0) continue;
+          for (let i = projState.qIdx; i < projState.queue.length; i++) {
+            const e = projState.queue[i];
+            if (projState.doneMap[e.id] || e.hours === 0) continue;
             frontTask = e;
-            frontCS = taskCanStart(e, s.doneMap, s.projStart, s.enabledIds, bl, s.cpStart, s.cpEnd);
+            frontCS = taskCanStart(e, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.cpStart, projState.cpEnd);
             break;
           }
           const mainBlocked = frontTask !== null && frontCS !== null && frontCS > day;
 
           // Run fill when blocked (standard), or continue Phase 3/4A chains already started
-          if (mainBlocked || s.fillUnlocked) {
-            for (const entry of s.queue) {
-              if (s.doneMap[entry.id]) continue;
+          if (mainBlocked || projState.fillUnlocked) {
+            for (const entry of projState.queue) {
+              if (projState.doneMap[entry.id]) continue;
               if (entry.id === frontTask?.id) continue;
-              if (s.currentTask?.entry.id === entry.id) continue;
+              if (projState.currentTask?.entry.id === entry.id) continue;
 
               // When not blocked but fill chain is ongoing: only continue Phase 3/4A
-              if (!mainBlocked && s.fillUnlocked) {
+              if (!mainBlocked && projState.fillUnlocked) {
                 if (entry._task.p !== '3' && entry._task.p !== '4A') continue;
               }
 
               if (entry.hours === 0) {
                 // inline-process 0-hour tasks so their dependents can start counting
-                const cs = taskCanStart(entry, s.doneMap, s.projStart, s.enabledIds, bl, s.cpStart, s.cpEnd);
+                const cs = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.cpStart, projState.cpEnd);
                 if (cs !== null && cs <= day) {
-                  const wEnd = entry.w > 0 ? aWD(day, entry.w, []) : null;
-                  s.done.push(makeRecord(entry, day, day, wEnd));
-                  s.doneMap[entry.id] = { end: day, waitEnd: wEnd };
-                  changed = true;
+                  const wEnd = entry.w > 0 ? addWorkDays(day, entry.w, []) : null;
+                  projState.done.push(makeRecord(entry, day, day, wEnd));
+                  projState.doneMap[entry.id] = { end: day, waitEnd: wEnd };
+                  madeProgress = true;
                 }
                 continue;
               }
 
-              const cs = taskCanStart(entry, s.doneMap, s.projStart, s.enabledIds, bl, s.cpStart, s.cpEnd);
+              const cs = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.cpStart, projState.cpEnd);
               if (cs !== null && cs <= day) {
-                s.currentTask2 = { entry, start: day, remaining: entry.hours };
+                projState.currentTask2 = { entry, start: day, remaining: entry.hours };
                 // Unlock Phase 3/4A chain continuation once activated
                 if (entry._task.p === '3' || entry._task.p === '4A') {
-                  s.fillUnlocked = true;
+                  projState.fillUnlocked = true;
                 }
                 break;
               }
@@ -219,63 +229,63 @@ export function runScheduleV2(projects, settings) {
 
       // 2c: allocate capacity, closest hardDeadline first
       if (capacity > 0) {
-        const active = [];
-        for (const s of states) {
-          if (s.currentTask)  active.push({ s, ct: s.currentTask,  slot: 'main' });
-          if (s.currentTask2) active.push({ s, ct: s.currentTask2, slot: 'secondary' });
+        const inProgressSlots = [];
+        for (const projState of projStates) {
+          if (projState.currentTask)  inProgressSlots.push({ projState, activeTask: projState.currentTask,  slot: 'main' });
+          if (projState.currentTask2) inProgressSlots.push({ projState, activeTask: projState.currentTask2, slot: 'secondary' });
         }
-        active.sort((a, b) => {
+        inProgressSlots.sort((a, b) => {
           // ns tasks claim capacity first to avoid being split across days
-          if (a.ct.entry.ns && !b.ct.entry.ns) return -1;
-          if (!a.ct.entry.ns && b.ct.entry.ns) return 1;
+          if (a.activeTask.entry.ns && !b.activeTask.entry.ns) return -1;
+          if (!a.activeTask.entry.ns && b.activeTask.entry.ns) return 1;
           // within ns group: smaller remaining hours first so short tasks complete same day
-          if (a.ct.entry.ns && b.ct.entry.ns) return a.ct.remaining - b.ct.remaining;
-          const da = a.ct.entry.hardDeadline;
-          const db = b.ct.entry.hardDeadline;
-          if (!da && !db) return 0;
-          if (!da) return 1;
-          if (!db) return -1;
-          return da - db;
+          if (a.activeTask.entry.ns && b.activeTask.entry.ns) return a.activeTask.remaining - b.activeTask.remaining;
+          const deadlineA = a.activeTask.entry.hardDeadline;
+          const deadlineB = b.activeTask.entry.hardDeadline;
+          if (!deadlineA && !deadlineB) return 0;
+          if (!deadlineA) return 1;
+          if (!deadlineB) return -1;
+          return deadlineA - deadlineB;
         });
 
-        for (const { s, ct, slot } of active) {
+        for (const { projState, activeTask, slot } of inProgressSlots) {
           if (capacity <= 0) break;
-          const alloc = Math.min(ct.remaining, capacity);
-          ct.remaining -= alloc;
+          const alloc = Math.min(activeTask.remaining, capacity);
+          activeTask.remaining -= alloc;
           capacity -= alloc;
 
-          if (ct.remaining <= 0) {
+          if (activeTask.remaining <= 0) {
             // wait period = external party's calendar; user blackouts don't apply
-            const waitEnd = ct.entry.w > 0 ? aWD(day, ct.entry.w, []) : null;
-            s.done.push(makeRecord(ct.entry, ct.start, day, waitEnd));
-            s.doneMap[ct.entry.id] = { end: day, waitEnd };
-            if (slot === 'main') s.currentTask  = null;
-            else                 s.currentTask2 = null;
-            changed = true;
+            const waitEnd = activeTask.entry.w > 0 ? addWorkDays(day, activeTask.entry.w, []) : null;
+            projState.done.push(makeRecord(activeTask.entry, activeTask.start, day, waitEnd));
+            projState.doneMap[activeTask.entry.id] = { end: day, waitEnd };
+            if (slot === 'main') projState.currentTask  = null;
+            else                 projState.currentTask2 = null;
+            madeProgress = true;
           }
         }
       }
     }
 
-    day = addD(day, 1);
+    day = addDays(day, 1);
   }
 
-  
-  return buildResult(states, projects, bl);
+
+  return buildResult(projStates, projects, blackouts);
 }
 
-function taskCanStart(entry, doneMap, projStart, enabledIds, bl, cpStart, cpEnd) {
+function taskCanStart(entry, doneMap, projStart, enabledIds, blackouts, cpStart, cpEnd) {
   let canStart = projStart;
   for (const depId of (entry.d || [])) {
     if (!enabledIds.has(depId)) continue;
     if (!doneMap[depId]) return null;
     const dep = doneMap[depId];
-    const depEff = dep.waitEnd ? nWD(addD(dep.waitEnd, 1), bl) : dep.end;
+    const depEff = dep.waitEnd ? nextWorkDay(addDays(dep.waitEnd, 1), blackouts) : dep.end;
     if (depEff > canStart) canStart = depEff;
   }
   if (entry.tm === 'sv30') {
     if (!doneMap['2.20']) return null;
-    const sv30 = nWD(addD(doneMap['2.20'].end, 30), bl);
+    const sv30 = nextWorkDay(addDays(doneMap['2.20'].end, 30), blackouts);
     if (sv30 > canStart) canStart = sv30;
   }
   // Phases 5, 6, 7, 8, 9 cannot start before 問卷開跑 (2.20) is done
@@ -285,13 +295,13 @@ function taskCanStart(entry, doneMap, projStart, enabledIds, bl, cpStart, cpEnd)
   }
   // Phase 8 cannot start before campaign launch (cpStart)
   if (entry._task.p === '8' && cpStart) {
-    const ms8 = nWD(cpStart, bl);
-    if (ms8 > canStart) canStart = ms8;
+    const minStart8 = nextWorkDay(cpStart, blackouts);
+    if (minStart8 > canStart) canStart = minStart8;
   }
   // Phase 9 cannot start before campaign end (cpEnd)
   if (entry._task.p === '9' && cpEnd) {
-    const ms9 = nWD(addD(cpEnd, 1), bl);
-    if (ms9 > canStart) canStart = ms9;
+    const minStart9 = nextWorkDay(addDays(cpEnd, 1), blackouts);
+    if (minStart9 > canStart) canStart = minStart9;
   }
   if (entry.pinnedDate  && entry.pinnedDate  > canStart) canStart = entry.pinnedDate;
   if (entry.pinnedStart && entry.pinnedStart > canStart) canStart = entry.pinnedStart;
@@ -312,47 +322,47 @@ function makeRecord(entry, start, end, waitEnd) {
   };
 }
 
-function buildResult(states, projects, bl) {
-  const sch   = {};
-  const miles = {};
+function buildResult(projStates, projects, blackouts) {
+  const schedule   = {};
+  const milestones = {};
 
-  for (const s of states) {
-    const pid = s.proj.id;
-    sch[pid] = {};
+  for (const projState of projStates) {
+    const pid = projState.proj.id;
+    schedule[pid] = {};
 
     let sv219End = null;
-    for (const rec of s.done) {
-      sch[pid][rec.id] = rec;
+    for (const rec of projState.done) {
+      schedule[pid][rec.id] = rec;
       if (rec.id === '2.20') sv219End = rec.end;
     }
 
-    // eSv: next WD after task 2.20 (問卷開跑) ends
-    const eSv = sv219End ? nWD(addD(sv219End, 1), bl) : null;
+    // earliestSurveyStart: next WD after task 2.20 (問卷開跑) ends
+    const earliestSurveyStart = sv219End ? nextWorkDay(addDays(sv219End, 1), blackouts) : null;
 
-    // eCp: (surveyEnd || surveyStart+30 || eSv+30) + 5 WD
-    const surveyEndDate   = pD(s.proj.surveyEnd);
-    const surveyStartDate = pD(s.proj.surveyStart);
+    // earliestCampaignEnd: (surveyEnd || surveyStart+30 || earliestSurveyStart+30) + 5 WD
+    const surveyEndDate   = parseDate(projState.proj.surveyEnd);
+    const surveyStartDate = parseDate(projState.proj.surveyStart);
     const cpBase = surveyEndDate
       ? surveyEndDate
       : surveyStartDate
-        ? addD(surveyStartDate, 30)
-        : eSv
-          ? addD(eSv, 30)
+        ? addDays(surveyStartDate, 30)
+        : earliestSurveyStart
+          ? addDays(earliestSurveyStart, 30)
           : null;
-    const eCp = cpBase ? aWD(cpBase, 5, bl) : null;
+    const earliestCampaignEnd = cpBase ? addWorkDays(cpBase, 5, blackouts) : null;
 
-    miles[pid] = {
-      eSv,
-      eCp,
-      calcStart: s.projStart,
+    milestones[pid] = {
+      eSv: earliestSurveyStart,
+      eCp: earliestCampaignEnd,
+      calcStart: projState.projStart,
     };
   }
 
   for (const proj of projects) {
-    if (!sch[proj.id])   sch[proj.id]   = {};
-    if (!miles[proj.id]) miles[proj.id] = {};
+    if (!schedule[proj.id])   schedule[proj.id]   = {};
+    if (!milestones[proj.id]) milestones[proj.id] = {};
   }
-  
 
-  return { sch, miles };
+
+  return { sch: schedule, miles: milestones };
 }
