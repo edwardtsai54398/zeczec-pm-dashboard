@@ -9,6 +9,27 @@ import {
   isBO as isBlackout,
 } from './dateUtils.js';
 
+// dateDef: { baseline, direction?, d?, unit? }
+// refDates: { svS, svE, cpS, cpE } — all Date | null
+function resolveDate(dateDef, refDates, blackouts) {
+  if (!dateDef) return null;
+  const baseline = refDates[dateDef.baseline];
+  if (!baseline) return null;
+  if (!dateDef.direction) return baseline;
+  const days = dateDef.d || 0;
+  if (dateDef.direction === 'pre') {
+    return dateDef.unit === 'w' ? subWorkDays(baseline, days, blackouts) : addDays(baseline, -days);
+  }
+  return dateDef.unit === 'w' ? addWorkDays(baseline, days, blackouts) : addDays(baseline, days);
+}
+
+// Returns true when two dateDefs describe the same calendar date
+function sameDateDef(a, b) {
+  if (!a || !b) return false;
+  return a.baseline === b.baseline && a.direction === b.direction
+    && a.d === b.d && a.unit === b.unit;
+}
+
 export function mkTasks(tpl) {
   return BT.map((t) => ({
     id: t.id,
@@ -31,24 +52,11 @@ export function runScheduleV2(projects, settings) {
     const projTaskMap = Object.fromEntries((proj.tasks || []).map((t) => [t.id, t]));
     const enabledIds = new Set((proj.tasks || []).filter((t) => t.enabled).map((t) => t.id));
 
+    const svStart = parseDate(proj.surveyStart);
+    const svEnd   = parseDate(proj.surveyEnd);
     const cpStart = parseDate(proj.campaignStart);
     const cpEnd   = parseDate(proj.campaignEnd);
-    const preNDates = {
-      ...(cpStart ? {
-        pre7:  addDays(cpStart, -7),
-        pre3:  addDays(cpStart, -3),
-        pre1:  addDays(cpStart, -1),
-        dcp0:  cpStart,
-        dcp1:  addDays(cpStart, 1),
-        dcp23: addDays(cpStart, 23),
-        dcp30: addDays(cpStart, 30),
-      } : {}),
-      ...(cpEnd ? {
-        pre7e: addDays(cpEnd, -7),
-        post1: addDays(cpEnd, 1),
-        post7: addWorkDays(cpEnd, 7, blackouts),
-      } : {}),
-    };
+    const refDates = { svS: svStart, svE: svEnd, cpS: cpStart, cpE: cpEnd };
 
     const queue = BT
       .filter((t) => enabledIds.has(t.id))
@@ -61,28 +69,24 @@ export function runScheduleV2(projects, settings) {
           pn:         proj.name,
           hours:      pt.pinnedHours != null ? pt.pinnedHours : (isPM ? t.pm : t.h),
           w:          pt.pinnedWait  != null ? pt.pinnedWait  : (t.w || 0),
-          dl:         t.dl,
-          tm:         t.tm,
-          sp:         t.sp || 0,
-          ns:         t.ns || false,
-          d:          t.d || [],
-          // pinnedDate：任務模板定義的時間錨點（如 pre7、dcp0），由活動日期推算出固定日期，任務不得早於此日開始
-          pinnedDate:  t.tm && preNDates[t.tm] ? preNDates[t.tm] : null,
-          // pinnedStart：使用者在專案設定中手動指定的最早開始日，優先級高於排程自動推算
+          dl:          t.dl,
+          ns:          t.ns || false,
+          d:           t.d || [],
+          hardDeadline: resolveDate(t.dl, refDates, blackouts),
+          // pinnedDate: 0-hour posting tasks whose minStart and dl point to the same calendar date
+          pinnedDate:  (t.h === 0 && sameDateDef(t.minStart, t.dl))
+                         ? resolveDate(t.minStart, refDates, blackouts)
+                         : null,
+          // pinnedStart: manually overridden earliest start from project settings
           pinnedStart: pt.pinnedStart ? parseDate(pt.pinnedStart) : null,
-          hardDeadline:
-            (t.tmDl && preNDates[t.tmDl])
-              ? subWorkDays(preNDates[t.tmDl], 3, blackouts)
-              : t.dl === 'sv'    ? parseDate(proj.surveyStart)
-              : t.dl === 'cp'    ? (t.dlb && cpStart ? subWorkDays(cpStart, t.dlb, blackouts) : cpStart)
-              : t.dl === 'pre10' ? (cpStart ? subWorkDays(cpStart, 10, blackouts) : null)
-              : null,
         };
       });
 
     projStates.push({
       proj,
       projStart,
+      svStart,
+      svEnd,
       cpStart,
       cpEnd,
       enabledIds,
@@ -115,7 +119,7 @@ export function runScheduleV2(projects, settings) {
           if (projState.doneMap[entry.id] || entry.hours > 0) continue;
           const pin = entry.pinnedDate || entry.pinnedStart;
           if (!pin || +pin !== +day) continue;
-          const canStart = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.cpStart, projState.cpEnd);
+          const canStart = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.svStart, projState.svEnd, projState.cpStart, projState.cpEnd);
           if (canStart === null || canStart > day) continue;
           projState.done.push(makeRecord(entry, day, day, null));
           projState.doneMap[entry.id] = { end: day, waitEnd: null };
@@ -144,7 +148,7 @@ export function runScheduleV2(projects, settings) {
           // skip tasks already completed (may have been processed by look-ahead)
           if (projState.doneMap[entry.id]) { projState.qIdx++; madeProgress = true; continue; }
           if (entry.hours > 0) break;
-          const canStart = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.cpStart, projState.cpEnd);
+          const canStart = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.svStart, projState.svEnd, projState.cpStart, projState.cpEnd);
           if (canStart === null || canStart > day) break;
           const waitEnd = entry.w > 0 ? addWorkDays(day, entry.w, []) : null;
           projState.done.push(makeRecord(entry, day, day, waitEnd));
@@ -163,7 +167,7 @@ export function runScheduleV2(projects, settings) {
         if (!projState.currentTask && projState.qIdx < projState.queue.length) {
           const entry = projState.queue[projState.qIdx];
           if (entry.hours > 0) {
-            const canStart = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.cpStart, projState.cpEnd);
+            const canStart = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.svStart, projState.svEnd, projState.cpStart, projState.cpEnd);
             if (canStart !== null && canStart <= day) {
               // ns tasks must complete same day — don't start if insufficient capacity remains
               if (!entry.ns || capacity >= entry.hours) {
@@ -184,7 +188,7 @@ export function runScheduleV2(projects, settings) {
             const e = projState.queue[i];
             if (projState.doneMap[e.id] || e.hours === 0) continue;
             frontTask = e;
-            frontCS = taskCanStart(e, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.cpStart, projState.cpEnd);
+            frontCS = taskCanStart(e, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.svStart, projState.svEnd, projState.cpStart, projState.cpEnd);
             break;
           }
           const mainBlocked = frontTask !== null && frontCS !== null && frontCS > day;
@@ -203,7 +207,7 @@ export function runScheduleV2(projects, settings) {
 
               if (entry.hours === 0) {
                 // inline-process 0-hour tasks so their dependents can start counting
-                const cs = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.cpStart, projState.cpEnd);
+                const cs = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.svStart, projState.svEnd, projState.cpStart, projState.cpEnd);
                 if (cs !== null && cs <= day) {
                   const wEnd = entry.w > 0 ? addWorkDays(day, entry.w, []) : null;
                   projState.done.push(makeRecord(entry, day, day, wEnd));
@@ -213,7 +217,7 @@ export function runScheduleV2(projects, settings) {
                 continue;
               }
 
-              const cs = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.cpStart, projState.cpEnd);
+              const cs = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.svStart, projState.svEnd, projState.cpStart, projState.cpEnd);
               if (cs !== null && cs <= day) {
                 projState.currentTask2 = { entry, start: day, remaining: entry.hours };
                 // Unlock Phase 3/4A chain continuation once activated
@@ -274,8 +278,10 @@ export function runScheduleV2(projects, settings) {
   return buildResult(projStates, projects, blackouts);
 }
 
-function taskCanStart(entry, doneMap, projStart, enabledIds, blackouts, cpStart, cpEnd) {
+function taskCanStart(entry, doneMap, projStart, enabledIds, blackouts, svStart, svEnd, cpStart, cpEnd) {
   let canStart = projStart;
+
+  // 1. Hard dependencies
   for (const depId of (entry.d || [])) {
     if (!enabledIds.has(depId)) continue;
     if (!doneMap[depId]) return null;
@@ -283,28 +289,37 @@ function taskCanStart(entry, doneMap, projStart, enabledIds, blackouts, cpStart,
     const depEff = dep.waitEnd ? nextWorkDay(addDays(dep.waitEnd, 1), blackouts) : dep.end;
     if (depEff > canStart) canStart = depEff;
   }
-  if (entry.tm === 'sv30') {
-    if (!doneMap['2.20']) return null;
-    const sv30 = nextWorkDay(addDays(doneMap['2.20'].end, 30), blackouts);
-    if (sv30 > canStart) canStart = sv30;
+
+  // 2. minStart constraint from task definition
+  const ms = entry._task.minStart;
+  if (ms) {
+    let msBaseline;
+    if (ms.baseline === 'svS') {
+      if (svStart) {
+        msBaseline = svStart;
+      } else {
+        if (enabledIds.has('2.20') && !doneMap['2.20']) return null;
+        msBaseline = doneMap['2.20']?.end ?? null;
+      }
+    } else if (ms.baseline === 'svE') {
+      msBaseline = svEnd;
+    } else if (ms.baseline === 'cpS') {
+      msBaseline = cpStart;
+    } else if (ms.baseline === 'cpE') {
+      msBaseline = cpEnd;
+    }
+
+    if (msBaseline) {
+      const resolvedRefDates = { svS: msBaseline, svE: svEnd, cpS: cpStart, cpE: cpEnd };
+      const resolvedMinStart = resolveDate(ms, resolvedRefDates, blackouts);
+      if (resolvedMinStart && resolvedMinStart > canStart) canStart = resolvedMinStart;
+    }
   }
-  // Phases 5, 6, 7, 8, 9 cannot start before 問卷開跑 (2.20) is done
-  if (['5', '6', '7', '8', '9'].includes(entry._task.p) && enabledIds.has('2.20')) {
-    if (!doneMap['2.20']) return null;
-    if (doneMap['2.20'].end > canStart) canStart = doneMap['2.20'].end;
-  }
-  // Phase 8 cannot start before campaign launch (cpStart)
-  if (entry._task.p === '8' && cpStart) {
-    const minStart8 = nextWorkDay(cpStart, blackouts);
-    if (minStart8 > canStart) canStart = minStart8;
-  }
-  // Phase 9 cannot start before campaign end (cpEnd)
-  if (entry._task.p === '9' && cpEnd) {
-    const minStart9 = nextWorkDay(addDays(cpEnd, 1), blackouts);
-    if (minStart9 > canStart) canStart = minStart9;
-  }
+
+  // 3. pinnedDate / pinnedStart overrides
   if (entry.pinnedDate  && entry.pinnedDate  > canStart) canStart = entry.pinnedDate;
   if (entry.pinnedStart && entry.pinnedStart > canStart) canStart = entry.pinnedStart;
+
   return canStart;
 }
 

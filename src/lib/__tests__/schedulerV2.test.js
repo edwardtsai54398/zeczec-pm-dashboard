@@ -114,12 +114,12 @@ describe('0-hour tasks', () => {
     expect(fmtF(t.start)).toBe(fmtF(t.end));
   });
 
-  it.each(scenarios)('5.3 (0h) anchors downstream: 5.4 starts on or after 5.3.end [$label]', ({ surveyStart, campaignStart }) => {
+  it.each(scenarios)('3.5 (0h, w=7) anchors downstream: 3.6 starts on or after 3.5.end [$label]', ({ surveyStart, campaignStart }) => {
     const p = proj('p', START, { surveyStart, campaignStart });
     const { sch } = runScheduleV2([p], settings);
-    const t53 = sch['p']['5.3'];
-    const t54 = sch['p']['5.4'];
-    expect(t54.start >= t53.end).toBe(true);
+    const t35 = sch['p']['3.5'];
+    const t36 = sch['p']['3.6'];
+    expect(t36.start >= t35.end).toBe(true);
   });
 });
 
@@ -239,7 +239,7 @@ describe('milestones', () => {
     const p = proj('p', START, { surveyStart, campaignStart });
     const { sch, miles } = runScheduleV2([p], settings);
     const svEnds = Object.values(sch['p'])
-      .filter((t) => t.dl === 'sv')
+      .filter((t) => t.dl?.baseline === 'svS')
       .map((t) => t.end);
     const lastEnd = new Date(Math.max(...svEnds.map((d) => d.getTime())));
     const expectedESv = nWD(addD(lastEnd, 1), []);
@@ -270,14 +270,13 @@ describe('phase 3 & 4A and 2.21 scheduling', () => {
     expect(t4a1.d).toEqual([]);
   });
 
-  it.each(scenarios)('2.21 starts at least 30 calendar days after 2.20 [$label]', ({ surveyStart, campaignStart }) => {
+  it.each(scenarios)('2.21 starts at least 30 calendar days after surveyStart [$label]', ({ surveyStart, campaignStart }) => {
     const p = proj('p', START, { surveyStart, campaignStart });
     const { sch } = runScheduleV2([p], settings);
-    const t219 = sch['p']['2.20'];
-    const t220 = sch['p']['2.21'];
-    expect(t219).toBeDefined();
-    expect(t220).toBeDefined();
-    expect(t220.start >= addD(t219.end, 30)).toBe(true);
+    const t221 = sch['p']['2.21'];
+    expect(t221).toBeDefined();
+    const svDate = new Date(surveyStart + 'T00:00:00');
+    expect(t221.start >= addD(svDate, 30)).toBe(true);
   });
 
   it.each(scenarios)('2.21 end is before campaignStart [$label]', ({ surveyStart, campaignStart }) => {
@@ -293,25 +292,25 @@ describe('phase 3 & 4A and 2.21 scheduling', () => {
 // ── Phase 5（廣告投放）pre10 deadline ─────────────────────────────────────────
 
 describe.each(scenarios)('Phase 5（廣告投放）pre10 deadline [$label]', ({ surveyStart, campaignStart }) => {
-  it('5.6 finishes on or before campaignStart − 10 working days', () => {
+  it('5.3 finishes on or before campaignStart − 10 working days', () => {
     const pre10Deadline = sWD(
       new Date(campaignStart + "T00:00:00"),
       10,
       [],
     );
-    
+
     const p = proj('p', START, { surveyStart, campaignStart });
     const { sch } = runScheduleV2([p], settings);
-    const t56 = sch['p']['5.6'];
-    expect(t56).toBeDefined();
-    expect(t56.end <= pre10Deadline).toBe(true);
+    const t53 = sch['p']['5.3'];
+    expect(t53).toBeDefined();
+    expect(t53.end <= pre10Deadline).toBe(true);
   });
 
-  it('5.x tasks carry dl="pre10" in scheduled records', () => {
+  it('5.x tasks carry dl with baseline=cpS, pre 10 workdays', () => {
     const p = proj('p', START, { surveyStart, campaignStart });
     const { sch } = runScheduleV2([p], settings);
-    expect(sch['p']['5.1'].dl).toBe('pre10');
-    expect(sch['p']['5.3'].dl).toBe('pre10');
+    expect(sch['p']['5.1'].dl).toMatchObject({ baseline: 'cpS', direction: 'pre', d: 10, unit: 'w' });
+    expect(sch['p']['5.3'].dl).toMatchObject({ baseline: 'cpS', direction: 'pre', d: 10, unit: 'w' });
   });
 
   it('eCp is set when campaignStart is provided (pre10 tasks included)', () => {
@@ -323,7 +322,7 @@ describe.each(scenarios)('Phase 5（廣告投放）pre10 deadline [$label]', ({ 
   it('campaignStart unset: pre10 tasks still schedule alongside all other tasks', () => {
     const p = proj('p', START, { surveyStart });
     const { sch } = runScheduleV2([p], settings);
-    expect(sch['p']['5.6']).toBeDefined();
+    expect(sch['p']['5.3']).toBeDefined();
     expect(Object.keys(sch['p'])).toHaveLength(BT.length);
   });
 });
@@ -379,10 +378,10 @@ describe.each(scenarios)('Phase 7 pinned posting tasks [$label]', ({ surveyStart
     expect(t76.end <= sWD(t77.start, 3, [])).toBe(true);
   });
 
-  it('7.3 record carries tm="pre7"', () => {
+  it('7.3 record carries minStart = cpS − 7 calendar days', () => {
     const p = proj('p', START, { surveyStart, campaignStart });
     const { sch } = runScheduleV2([p], settings);
-    expect(sch['p']['7.3'].tm).toBe('pre7');
+    expect(sch['p']['7.3'].minStart).toMatchObject({ baseline: 'cpS', direction: 'pre', d: 7, unit: 'c' });
   });
 });
 
@@ -463,9 +462,9 @@ describe.each(scenarios)('Phase 7 post-launch pinned tasks [$label]', ({ surveyS
     expect(sch['p']['8.9'].end <= sWD(addD(ce, 1), 3, [])).toBe(true);
   });
 
-  it('7.10 record carries tm="dcp0"', () => {
+  it('7.10 record carries minStart = cpS (campaign launch day)', () => {
     const { sch } = runScheduleV2([mkProj('p')], settings);
-    expect(sch['p']['7.10'].tm).toBe('dcp0');
+    expect(sch['p']['7.10'].minStart).toMatchObject({ baseline: 'cpS' });
   });
 });
 
