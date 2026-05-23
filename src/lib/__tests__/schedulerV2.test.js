@@ -705,9 +705,24 @@ describe('ns（不拆分優先）', () => {
     const t25 = sch['p1']['2.5'];
     expect(t24).toBeDefined();
     expect(t25).toBeDefined();
-    // 多專案共享容量時，當日容量可能被耗盡後 ns 任務才啟動，導致跨日；
-    // 但依賴順序必須保持：2.5 一定在 2.4 結束後才開始
     expect(t25.start >= t24.end).toBe(true);
+  });
+
+  // Bug 1 回歸：兩個同天競搶 ns 容量的專案，各自的 ns 任務不得跨日
+  it('Bug 1 回歸：兩個同時啟動的專案各自的 2.4 (ns, 1h) 都在同一天內完成', () => {
+    const pA = proj('A', START, { surveyStart: '2026-07-06', campaignStart: '2026-08-17' });
+    const pB = proj('B', START, { surveyStart: '2026-07-06', campaignStart: '2026-08-17' });
+    const { sch } = runScheduleV2([pA, pB], settings);
+    expect(fmtF(sch['A']['2.4'].start)).toBe(fmtF(sch['A']['2.4'].end));
+    expect(fmtF(sch['B']['2.4'].start)).toBe(fmtF(sch['B']['2.4'].end));
+  });
+
+  it('Bug 1 回歸：兩個同時啟動的專案各自的 2.5 (ns, 8h) 都在同一天內完成', () => {
+    const pA = proj('A', START, { surveyStart: '2026-07-06', campaignStart: '2026-08-17' });
+    const pB = proj('B', START, { surveyStart: '2026-07-06', campaignStart: '2026-08-17' });
+    const { sch } = runScheduleV2([pA, pB], settings);
+    expect(fmtF(sch['A']['2.5'].start)).toBe(fmtF(sch['A']['2.5'].end));
+    expect(fmtF(sch['B']['2.5'].start)).toBe(fmtF(sch['B']['2.5'].end));
   });
 });
 
@@ -791,6 +806,18 @@ describe('scenario: startDate 2026-05-20, Jun10-16 blockout', () => {
       } else {
         expect(t.waitEnd).toBeNull();
       }
+    }
+  });
+
+  // Bug 3 回歸：副槽跨專案任務，較近 deadline 的先拿容量（不受陣列順序影響）
+  it('Bug 3 回歸：兩個 cpStart 相同的專案，陣列順序互換後結果不變', () => {
+    const SAME_CP = '2026-08-17';
+    const pA = proj('A', START,        { surveyStart: '2026-07-06', campaignStart: SAME_CP });
+    const pB = proj('B', '2026-05-22', { surveyStart: '2026-07-13', campaignStart: SAME_CP });
+    const { sch: fwd } = runScheduleV2([pA, pB], settings);
+    const { sch: rev } = runScheduleV2([pB, pA], settings);
+    for (const id of Object.keys(fwd['B'])) {
+      expect(fmtF(fwd['B'][id].start)).toBe(fmtF(rev['B'][id].start));
     }
   });
 

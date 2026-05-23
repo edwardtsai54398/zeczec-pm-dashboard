@@ -161,115 +161,101 @@ export function runScheduleV2(projects, settings) {
         }
       }
 
-      // 2b: start next non-zero task(s) per project
+      // 2b': build unified task pool (active + candidates), sort, allocate capacity
+      const pool = [];
+
       for (const projState of projStates) {
+        // add active tasks already in progress
+        if (projState.currentTask) {
+          pool.push({
+            projState,
+            activeTask: projState.currentTask,
+            slot: 'main',
+            isNew: false,
+            queueIdx: projState.queue.findIndex(e => e.id === projState.currentTask.entry.id),
+          });
+        }
+        if (projState.currentTask2) {
+          pool.push({
+            projState,
+            activeTask: projState.currentTask2,
+            slot: 'secondary',
+            isNew: false,
+            queueIdx: projState.queue.findIndex(e => e.id === projState.currentTask2.entry.id),
+          });
+        }
+
         // advance qIdx past tasks already completed out-of-order
         while (projState.qIdx < projState.queue.length && projState.doneMap[projState.queue[projState.qIdx].id]) projState.qIdx++;
 
-        // main slot
+        // main slot candidate
+        let mainCandidateId = projState.currentTask?.entry.id ?? null;
         if (!projState.currentTask && projState.qIdx < projState.queue.length) {
           const entry = projState.queue[projState.qIdx];
           if (entry.hours > 0) {
             const canStart = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.svStart, projState.svEnd, projState.cpStart, projState.cpEnd);
             if (canStart !== null && canStart <= day) {
-              // ns tasks must complete same day — don't start if insufficient capacity remains
-              if (!entry.ns || capacity >= entry.hours) {
-                projState.currentTask = { entry, start: day, remaining: entry.hours };
-                projState.qIdx++;
-              }
+              pool.push({
+                projState,
+                activeTask: { entry, start: day, remaining: entry.hours },
+                slot: 'main',
+                isNew: true,
+                queueIdx: projState.qIdx,
+              });
+              mainCandidateId = entry.id;
             }
           }
         }
 
-        // currentTask2 slot: fill idle time when main slot is blocked, and continue
-        // Phase 3/4A chains once they've been activated
+        // secondary slot candidate (fill logic)
         if (!projState.currentTask2) {
-          // find the first non-zero-hour undone task at or after qIdx
-          let frontTask = null;
-          let frontCS = null;
-          for (let i = projState.qIdx; i < projState.queue.length; i++) {
-            const e = projState.queue[i];
-            if (projState.doneMap[e.id] || e.hours === 0) continue;
-            frontTask = e;
-            frontCS = taskCanStart(e, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.svStart, projState.svEnd, projState.cpStart, projState.cpEnd);
-            break;
-          }
-          const mainBlocked = frontTask !== null && frontCS !== null && frontCS > day;
-
-          // Run fill when blocked (standard), or continue Phase 3/4A chains already started
-          if (mainBlocked || projState.fillUnlocked) {
-            for (const entry of projState.queue) {
-              if (projState.doneMap[entry.id]) continue;
-              if (entry.id === frontTask?.id) continue;
-              if (projState.currentTask?.entry.id === entry.id) continue;
-
-              // When not blocked but fill chain is ongoing: only continue Phase 3/4A
-              if (!mainBlocked && projState.fillUnlocked) {
-                if (entry._task.p !== '3' && entry._task.p !== '4A') continue;
-              }
-
-              if (entry.hours === 0) {
-                // inline-process 0-hour tasks so their dependents can start counting
-                const cs = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.svStart, projState.svEnd, projState.cpStart, projState.cpEnd);
-                if (cs !== null && cs <= day) {
-                  const wEnd = entry.w > 0 ? addWorkDays(day, entry.w, []) : null;
-                  projState.done.push(makeRecord(entry, day, day, wEnd));
-                  projState.doneMap[entry.id] = { end: day, waitEnd: wEnd };
-                  madeProgress = true;
-                }
-                continue;
-              }
-
-              const cs = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.svStart, projState.svEnd, projState.cpStart, projState.cpEnd);
-              if (cs !== null && cs <= day) {
-                projState.currentTask2 = { entry, start: day, remaining: entry.hours };
-                // Unlock Phase 3/4A chain continuation once activated
-                if (entry._task.p === '3' || entry._task.p === '4A') {
-                  projState.fillUnlocked = true;
-                }
-                break;
-              }
-            }
+          const { candidate, candidateIdx, inlineProgress } =
+            scanFillSlot(projState, day, blackouts, mainCandidateId);
+          if (inlineProgress) madeProgress = true;
+          if (candidate !== null) {
+            pool.push({
+              projState,
+              activeTask: { entry: candidate, start: day, remaining: candidate.hours },
+              slot: 'secondary',
+              isNew: true,
+              queueIdx: candidateIdx,
+            });
           }
         }
       }
 
-      // 2c: allocate capacity, closest hardDeadline first
-      if (capacity > 0) {
-        const inProgressSlots = [];
-        for (const projState of projStates) {
-          if (projState.currentTask)  inProgressSlots.push({ projState, activeTask: projState.currentTask,  slot: 'main' });
-          if (projState.currentTask2) inProgressSlots.push({ projState, activeTask: projState.currentTask2, slot: 'secondary' });
-        }
-        inProgressSlots.sort((a, b) => {
-          // ns tasks claim capacity first to avoid being split across days
-          if (a.activeTask.entry.ns && !b.activeTask.entry.ns) return -1;
-          if (!a.activeTask.entry.ns && b.activeTask.entry.ns) return 1;
-          // within ns group: smaller remaining hours first so short tasks complete same day
-          if (a.activeTask.entry.ns && b.activeTask.entry.ns) return a.activeTask.remaining - b.activeTask.remaining;
-          const deadlineA = a.activeTask.entry.hardDeadline;
-          const deadlineB = b.activeTask.entry.hardDeadline;
-          if (!deadlineA && !deadlineB) return 0;
-          if (!deadlineA) return 1;
-          if (!deadlineB) return -1;
-          return deadlineA - deadlineB;
-        });
+      pool.sort(poolComparator);
 
-        for (const { projState, activeTask, slot } of inProgressSlots) {
-          if (capacity <= 0) break;
-          const alloc = Math.min(activeTask.remaining, capacity);
-          activeTask.remaining -= alloc;
-          capacity -= alloc;
+      for (const { projState, activeTask, slot, isNew } of pool) {
+        if (capacity <= 0) break;
 
-          if (activeTask.remaining <= 0) {
-            // wait period = external party's calendar; user blackouts don't apply
-            const waitEnd = activeTask.entry.w > 0 ? addWorkDays(day, activeTask.entry.w, []) : null;
-            projState.done.push(makeRecord(activeTask.entry, activeTask.start, day, waitEnd));
-            projState.doneMap[activeTask.entry.id] = { end: day, waitEnd };
-            if (slot === 'main') projState.currentTask  = null;
-            else                 projState.currentTask2 = null;
-            madeProgress = true;
+        // ns candidate: skip if insufficient capacity (fixes Bug 1 & Bug 2)
+        if (activeTask.entry.ns && capacity < activeTask.remaining) continue;
+
+        // formally start new tasks
+        if (isNew) {
+          if (slot === 'main') {
+            projState.currentTask = activeTask;
+            projState.qIdx++;
+          } else {
+            projState.currentTask2 = activeTask;
+            if (activeTask.entry._task.p === '3' || activeTask.entry._task.p === '4A') {
+              projState.fillUnlocked = true;
+            }
           }
+        }
+
+        const alloc = Math.min(activeTask.remaining, capacity);
+        activeTask.remaining -= alloc;
+        capacity -= alloc;
+
+        if (activeTask.remaining <= 0) {
+          const waitEnd = activeTask.entry.w > 0 ? addWorkDays(day, activeTask.entry.w, []) : null;
+          projState.done.push(makeRecord(activeTask.entry, activeTask.start, day, waitEnd));
+          projState.doneMap[activeTask.entry.id] = { end: day, waitEnd };
+          if (slot === 'main') projState.currentTask  = null;
+          else                 projState.currentTask2 = null;
+          madeProgress = true;
         }
       }
     }
@@ -279,6 +265,88 @@ export function runScheduleV2(projects, settings) {
 
 
   return buildResult(projStates, projects, blackouts);
+}
+
+// Returns { candidate, candidateIdx, inlineProgress }
+// mainActiveId: entry.id of current main-slot task (existing or isNew candidate), excluded from scan
+function scanFillSlot(projState, day, blackouts, mainActiveId) {
+  let candidate = null, candidateIdx = -1, inlineProgress = false;
+
+  let frontTask = null, frontCanStart = null;
+  for (let i = projState.qIdx; i < projState.queue.length; i++) {
+    const e = projState.queue[i];
+    if (projState.doneMap[e.id] || e.hours === 0) continue;
+    frontTask = e;
+    frontCanStart = taskCanStart(e, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.svStart, projState.svEnd, projState.cpStart, projState.cpEnd);
+    break;
+  }
+  const mainBlocked = frontTask !== null && frontCanStart !== null && frontCanStart > day;
+
+  if (!mainBlocked && !projState.fillUnlocked) return { candidate, candidateIdx, inlineProgress };
+
+  for (let i = 0; i < projState.queue.length; i++) {
+    const entry = projState.queue[i];
+    if (projState.doneMap[entry.id]) continue;
+    if (entry.id === frontTask?.id) continue;
+    if (mainActiveId && entry.id === mainActiveId) continue;
+
+    if (!mainBlocked && projState.fillUnlocked) {
+      if (entry._task.p !== '3' && entry._task.p !== '4A') continue;
+    }
+
+    if (entry.hours === 0) {
+      const canStart = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.svStart, projState.svEnd, projState.cpStart, projState.cpEnd);
+      if (canStart !== null && canStart <= day) {
+        const wEnd = entry.w > 0 ? addWorkDays(day, entry.w, []) : null;
+        projState.done.push(makeRecord(entry, day, day, wEnd));
+        projState.doneMap[entry.id] = { end: day, waitEnd: wEnd };
+        inlineProgress = true;
+      }
+      continue;
+    }
+
+    const canStart = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.svStart, projState.svEnd, projState.cpStart, projState.cpEnd);
+    if (canStart !== null && canStart <= day) {
+      candidate = entry;
+      candidateIdx = i;
+      break;
+    }
+  }
+
+  return { candidate, candidateIdx, inlineProgress };
+}
+
+function poolComparator(a, b) {
+  const aNs = a.activeTask.entry.ns, bNs = b.activeTask.entry.ns;
+  if (aNs && !bNs) return -1;
+  if (!aNs && bNs) return 1;
+
+  if (aNs && bNs) {
+    const dA = a.activeTask.entry.hardDeadline, dB = b.activeTask.entry.hardDeadline;
+    if (!dA && !dB) return b.activeTask.entry.hours - a.activeTask.entry.hours;
+    if (!dA) return 1;
+    if (!dB) return -1;
+    const diff = dA - dB;
+    if (diff !== 0) return diff;
+    return b.activeTask.entry.hours - a.activeTask.entry.hours;
+  }
+
+  if (a.projState === b.projState) return a.queueIdx - b.queueIdx;
+
+  const dA = a.activeTask.entry.hardDeadline, dB = b.activeTask.entry.hardDeadline;
+  if (!dA && !dB) {
+    if (a.slot === 'main' && b.slot !== 'main') return -1;
+    if (a.slot !== 'main' && b.slot === 'main') return 1;
+    return 0;
+  }
+  if (!dA) return 1;
+  if (!dB) return -1;
+  const ddiff = dA - dB;
+  if (ddiff !== 0) return ddiff;
+
+  if (a.slot === 'main' && b.slot !== 'main') return -1;
+  if (a.slot !== 'main' && b.slot === 'main') return 1;
+  return 0;
 }
 
 function taskCanStart(entry, doneMap, projStart, enabledIds, blackouts, svStart, svEnd, cpStart, cpEnd) {
