@@ -102,27 +102,30 @@ export function runScheduleV2(projects, settings) {
 
   if (projStates.length === 0) return buildResult(projStates, projects, blackouts);
 
-  const simStart = projStates.reduce(
+  const allProjStart = projStates.reduce(
     (min, projState) => (projState.projStart < min ? projState.projStart : min),
     projStates[0].projStart,
   );
 
-  let day = new Date(simStart);
+  let day = new Date(allProjStart);
   const MAX_DAYS = 1500;
 
+  // 從所有專案的第一天開始找任務
   for (let d = 0; d < MAX_DAYS; d++) {
     if (isWeekend(day) || isBlackout(day, blackouts)) {
-      // pinned 0-hour tasks (7.3/7.5/7.7) trigger on their exact calendar date, even on weekends
+      // pinned tasks trigger on their exact calendar date, even on weekends/blackouts
+      // 每個專案的未排程任務中，找被使用者釘選和系統釘選的任務，任務加進已排程清單done, doneMap
       for (const projState of projStates) {
         for (let i = 0; i < projState.queue.length; i++) {
           const entry = projState.queue[i];
-          if (projState.doneMap[entry.id] || entry.hours > 0) continue;
+          if (projState.doneMap[entry.id]) continue;
           const pin = entry.pinnedDate || entry.pinnedStart;
           if (!pin || +pin !== +day) continue;
           const canStart = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.svStart, projState.svEnd, projState.cpStart, projState.cpEnd);
           if (canStart === null || canStart > day) continue;
-          projState.done.push(makeRecord(entry, day, day, null));
-          projState.doneMap[entry.id] = { end: day, waitEnd: null };
+          const waitEnd = entry.w > 0 ? addWorkDays(day, entry.w, []) : null;
+          projState.done.push(makeRecord(entry, day, day, waitEnd));
+          projState.doneMap[entry.id] = { end: day, waitEnd };
         }
       }
       day = addDays(day, 1);
