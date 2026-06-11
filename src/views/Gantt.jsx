@@ -3,6 +3,7 @@ import { dBt, addD, fmt, pD, isBO as checkBO } from '../lib/dateUtils.js';
 import { TONES } from './shared.js';
 import { BT } from '../lib/tasks.js';
 import { DateInput } from '../components/DateInput.jsx';
+import RandomCat from '../components/CatSvg/RandomCat.jsx';
 
 function TaskEditModal({ state, projects, data, onSave, onClose }) {
   const proj = projects.find((p) => p.id === state.pid);
@@ -167,6 +168,23 @@ function barSegments(startD, endD, gridStart, allowWeekends = false) {
 
   return segments;
 }
+
+// 確定性亂數（mulberry32）：純函式，給貓咪佈局用，依 seed 重現，
+// 避免在 render 期間呼叫 Math.random（React Compiler 不允許）。
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// 每次「整頁載入」隨機一次的種子：在模組首次被載入時求值，之後元件重繪、
+// 切出分頁再切回（unmount/remount）都沿用同值，唯有重新整理頁面才會改變。
+// 混入貓咪佈局的 seed，使同版面在不同次開啟 app 時位置不同，但同一 session 內穩定。
+const SESSION_CAT_SEED = (Math.random() * 4294967296) >>> 0;
 
 export function Gantt({ projects, data, onPinUpdate, settings }) {
   const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
@@ -354,6 +372,96 @@ export function Gantt({ projects, data, onPinUpdate, settings }) {
       return minA - minB;
     });
   }, [selectedProjects, data]);
+
+  // 在甘特條的空白格隨機放 5~7 隻裝飾貓。佔用表依「實際 DOM 渲染順序」逐 row 建立，
+  // 切換疊圖 / 換週 / 縮放都會重算重排。嚴格不重疊，放不下就少放。
+  // 用 seeded PRNG（mulberry32）保持 render 純淨：依 deps 重現、re-render 不亂跳。
+  const catPlacements = useMemo(() => {
+    const catEnabled = settings?.catEnabled ?? true;
+    const catCount = settings?.catCount ?? 20;
+    if (!catEnabled) return [];
+
+    // 1. 建立佔用表：每列是 banner（整列禁放）或 { cols:Set<欄位> }
+    const rows = [];
+    const addSeg = (cols, t, start, end, allowWE = false) => {
+      barSegments(start, end, viewStart, allowWE).forEach(seg => {
+        for (let c = seg.cs; c < seg.cs + seg.span; c++) {
+          if (c >= 0 && c < VIEW_DAYS) cols.add(c);
+        }
+      });
+    };
+    if (overlayMode) {
+      overlayRows.forEach(({ bars }) => {
+        const cols = new Set();
+        bars.forEach(({ t }) => {
+          addSeg(cols, t, t.start, t.end, WEEKEND_BAR_TASKS.has(t.id));
+          if (t.waitEnd) addSeg(cols, t, addD(t.end, 1), t.waitEnd);
+        });
+        rows.push({ cols });
+      });
+    } else {
+      normalGroups.forEach(({ tasks }) => {
+        rows.push({ full: true }); // 專案 banner 列整列不放
+        tasks.forEach(t => {
+          const cols = new Set();
+          addSeg(cols, t, t.start, t.end, WEEKEND_BAR_TASKS.has(t.id));
+          if (t.waitEnd) addSeg(cols, t, addD(t.end, 1), t.waitEnd);
+          rows.push({ cols });
+        });
+      });
+    }
+
+    const R = rows.length;
+    if (R === 0 || VIEW_DAYS === 0) return [];
+
+    // 2. 隨機放置（嚴格不重疊：含彼此與甘特條）。seed 由「版面 + 本次載入的隨機種子」衍生：
+    //    切換疊圖 / 換週 / 縮放 → 版面變 → 重新散佈以避免壓到甘特條；同版面 re-render
+    //    或切出分頁再切回 → seed 不變 → 位置穩定。重新整理頁面 → SESSION_CAT_SEED 變 → 位置不同。
+    let occCount = 0;
+    rows.forEach(row => { occCount += row.full ? VIEW_DAYS : row.cols.size; });
+    const seed = (overlayMode ? 1 : 0) * 2654435761 + R * 40503 + VIEW_DAYS * 769 +
+      COL_W * 97 + occCount * 13 + (viewStart.getTime() / 864e5 | 0) + SESSION_CAT_SEED;
+    const rng = mulberry32(seed);
+
+    const ROW_H = 40;
+    const target = catCount;
+    const placed = [];
+    const fits = (r0, c0, rowsNeed, colsNeed) => {
+      if (r0 + rowsNeed > R || c0 + colsNeed > VIEW_DAYS) return false;
+      for (let r = r0; r < r0 + rowsNeed; r++) {
+        const row = rows[r];
+        if (row.full) return false;
+        for (let c = c0; c < c0 + colsNeed; c++) {
+          if (row.cols.has(c)) return false;
+        }
+      }
+      return true;
+    };
+    const occupy = (r0, c0, rowsNeed, colsNeed) => {
+      for (let r = r0; r < r0 + rowsNeed; r++) {
+        for (let c = c0; c < c0 + colsNeed; c++) rows[r].cols.add(c);
+      }
+    };
+    for (let i = 0; i < target; i++) {
+      const size = Math.round(100 + rng() * 50); // 100~150
+      const colsNeed = Math.ceil(size / COL_W);
+      const rowsNeed = Math.ceil(size / ROW_H);
+      for (let attempt = 0; attempt < 30; attempt++) {
+        const r0 = Math.floor(rng() * Math.max(1, R - rowsNeed + 1));
+        const c0 = Math.floor(rng() * Math.max(1, VIEW_DAYS - colsNeed + 1));
+        if (!fits(r0, c0, rowsNeed, colsNeed)) continue;
+        occupy(r0, c0, rowsNeed, colsNeed);
+        placed.push({
+          key: `${overlayMode ? 'o' : 'n'}-${i}-${r0}-${c0}`,
+          left: c0 * COL_W,
+          top: r0 * ROW_H,
+          size,
+        });
+        break;
+      }
+    }
+    return placed;
+  }, [overlayMode, normalGroups, overlayRows, viewStart, VIEW_DAYS, COL_W, settings?.catEnabled, settings?.catCount]);
 
   const milestones = useMemo(() => {
     const ms = [];
@@ -707,6 +815,11 @@ export function Gantt({ projects, data, onPinUpdate, settings }) {
                     </div>
                   ))
                 )}
+
+                {catPlacements.map(c => (
+                  <RandomCat key={c.key} size={c.size} className="g2-cat"
+                    style={{ left: c.left, top: c.top }} />
+                ))}
               </div>
             </div>
           </div>

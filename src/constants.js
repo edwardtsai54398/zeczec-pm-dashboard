@@ -36,6 +36,8 @@ export const NAV = [
 
 export const D_SETTINGS = {
   hoursPerDay: 8,
+  catEnabled: true,
+  catCount: 20,
   blackouts: [
     { id: "1", name: "出國",     start: "2026-06-20", end: "2026-06-26" },
     { id: "2", name: "員工旅遊", start: "2026-07-10", end: "2026-07-16" },

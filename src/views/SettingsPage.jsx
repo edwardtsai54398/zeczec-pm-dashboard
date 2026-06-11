@@ -29,9 +29,32 @@ export function SettingsPage({ settings, onUpdate }) {
         </div>
       </div>
 
+      <div className="card" style={{ marginBottom: 18 }}>
+        <div className="card-title"><span>貓咪陪伴</span></div>
+        <p className="card-sub">在甘特圖的空白處隨機放置貓咪</p>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 14 }}>
+          <input
+            type="checkbox"
+            checked={settings.catEnabled ?? true}
+            onChange={(e) => onUpdate({ ...settings, catEnabled: e.target.checked })}
+          />
+          <span style={{ fontSize: 14, color: "var(--ink-2)" }}>在甘特圖顯示貓咪</span>
+        </label>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+          <input
+            type="number" className="text-in"
+            style={{ width: 100, fontSize: 24, fontWeight: 500, fontFamily: "var(--font-display)", textAlign: "center" }}
+            value={settings.catCount ?? 20} min={0} max={50}
+            disabled={!(settings.catEnabled ?? true)}
+            onChange={(e) => onUpdate({ ...settings, catCount: +e.target.value })}
+          />
+          <span style={{ fontSize: 14, color: "var(--ink-2)" }}>隻貓咪</span>
+        </div>
+      </div>
+
       <div className="card">
         <div className="card-title"><span>不可用時段</span></div>
-        <p className="card-sub">出國、員工旅遊、長假等，排程會自動避開</p>
+        <p className="card-sub">出國、長假等，排程會自動避開</p>
 
         {settings.blackouts.map((b) => (
           <div key={b.id} className="blackout-row">
