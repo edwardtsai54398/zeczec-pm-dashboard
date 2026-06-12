@@ -367,7 +367,122 @@ Brief(4.5) → 腳本過稿(+5d)(4.6) → 影片過稿(+5d)(4.7) → B copy(4.8)
 
 ---
 
-## 10. 附件與參考資料
+## 10. 雲端化與多人協作規劃（Roadmap）
+
+> 本章為尚未實作的後續規劃。目的：解決「資料只存在使用者瀏覽器，開發者無法在 bug 回報當下取得現場資料重現」的問題，並支援未來多人協作。
+
+### 10.1 背景與問題
+
+- 目前資料存於使用者瀏覽器 localStorage（`cfpm4` = 專案 + 設定，另有 `zeczec_todo_done` / `zeczec_overdue_done`）。
+- 痛點：使用者回報排程 bug 時，開發者拿不到現場資料與操作過程，無法第一時間重現修復。
+- 新需求：未來多人協作**同一份資料**，部分使用者僅可檢視（viewer）、部分可編輯（editor）。
+
+### 10.2 架構翻轉：雲端成為唯一真相（Source of Truth）
+
+- 多人協作後，**雲端資料庫成為唯一真相**；localStorage 從「資料本尊」降級為「快取 / 離線暫存」。
+- [usePersistence.js](src/hooks/usePersistence.js) 的角色由「存到哪」改為「與雲端同步 + 本地快取」。
+- **廢棄**單人 `device_id` 個人備份方案；Phase 1 起即以多人為前提設計，避免重工。
+- 純前端、無伺服器可藏密鑰 → 權限與安全邊界必須落在後端的 **RLS（Row Level Security）**，前端隱藏 UI 僅為體驗，非安全機制。
+
+### 10.3 三個可分離的目標（依投資報酬率排序）
+
+| # | 目標 | 解決什麼 |
+|---|------|---------|
+| G1 | 看得到錯誤本身 | 使用者端噴的 JS error、stack、瀏覽器/裝置版本 |
+| G2 | 拿得到出事當下資料 | 現場 projects / settings 快照，可在本機載入重現 |
+| G3 | 重現操作過程 | 記錄動作序列，可重播到出事為止，並作為協作稽核軌跡 |
+
+> G1 + G2 用低成本即可解掉八成痛點，建議照此順序推進，不要一開始就衝 G3（事件溯源）。
+
+### 10.4 階段規劃
+
+**Phase 0 — 止血（錯誤監控 + 現場快照）**
+不改架構，先讓錯誤與現場資料自動回到開發者手上。
+
+- 接 **Sentry**：自動蒐集 JS error、stack、breadcrumbs、瀏覽器/裝置資訊。
+- React **Error Boundary** + `window.onerror` / `unhandledrejection` 全域攔截，避免白畫面又無訊息。
+- 「回報問題」按鈕：把當前 localStorage 快照（沿用 [settingsIO.js](src/components/SettingsIO/settingsIO.js) 的匯出邏輯）+ 最近錯誤 POST 到雲端端點（**單次上傳，不做同步**）。
+
+**Phase 1 — 雲端化 + 帳號 + 角色權限**
+本階段核心大塊，奠定多人協作地基。
+
+- 導入 **Supabase**（Postgres + Auth + RLS）。
+- 雲端成為 source of truth，localStorage 改為快取。
+- **Supabase Auth**（magic link 免密碼登入）取代 device_id。
+- 建立 workspace + members + role（viewer / editor）。
+- 權限由 **RLS 強制**：所有 member 可 SELECT，僅 editor 可 INSERT / UPDATE / DELETE。
+- 資料正規化（見 10.5）。
+
+**Phase 2 — 即時協作**
+
+- **Supabase Realtime** 訂閱：editor 變更後，其他人（含 viewer）畫面即時更新。
+- 避免拿到舊資料去覆蓋他人剛存的變更。
+
+**Phase 3 — 操作 Log / 稽核軌跡**
+
+- 在 [App.jsx](src/App.jsx) 既有的約 6 個 mutation handler（`updateProject`、`updateTaskPin`、`addProject`、`deleteProject`、`confirmDelete`、`setSettings`）外包一層 `dispatch`，將動作語意化為 typed event。
+- append-only audit 表記錄 `{ user, ts, type, payload, stateVersion }`。
+- 一表兩用：bug 重現（replay）+「誰在何時改了什麼」稽核。多人情境下價值翻倍。
+
+**Phase 4 — 選配**
+
+- Session Replay（rrweb / Sentry Replay）：像錄影般重現使用者操作畫面。
+- 僅在出現「多人同時編輯同一欄位」需求時才導入 CRDT（Yjs）；當前規模不需要。
+
+**實作狀態：**
+
+- [] Phase 0：Sentry 錯誤監控 + 全域錯誤攔截 + 一鍵回報快照
+- [] Phase 1：Supabase 導入 + Auth 登入 + 角色權限（RLS） + 資料正規化
+- [] Phase 2：Supabase Realtime 即時協作
+- [] Phase 3：操作 log / audit 稽核軌跡
+- [] Phase 4（選配）：Session Replay / CRDT
+
+### 10.5 關鍵設計決策
+
+**(A) 資料粒度 — 待決策**
+
+多人編輯下，整包 JSON 覆蓋（last-write-wins）會默默蓋掉他人變更。兩條路：
+
+| 方案 | 成本 | 適用 |
+|------|------|------|
+| A. 維持 blob + 樂觀鎖（加 version 欄位，版本不符即擋下要求重載） | 低 | 幾乎不會兩人同時動同一案 |
+| B. 正規化成資料表（`projects` / `tasks` / `kols` / `settings` 各自成 row） | 中 | 多人同時編輯不同案／任務 ← **建議** |
+
+> 建議至少正規化到 project / task 層級；row-level 後彼此不互踩，稀有真衝突以 last-write-wins-per-row 處理即可，**不需 CRDT**。最終取決於「實務上是否會多人同時各自編輯」。
+
+**(B) Settings 拆分 — 共享 vs 個人**
+
+| 類別 | 欄位 | 儲存層級 |
+|------|------|---------|
+| 共享排程參數 | `hoursPerDay`、`blackouts` | workspace（共享） |
+| 個人 UI 偏好 | `accent` 配色、`density`、`ambient`、`showAvatar`、`catEnabled`、`catCount`、主題 | per-user（個人） |
+
+> 否則一個人改主題會讓全公司跟著變。
+
+**(C) 權限矩陣**
+
+| 操作 | viewer | editor |
+|------|:------:|:------:|
+| 檢視專案 / 甘特圖 / KOL | ✅ | ✅ |
+| 編輯任務 / 走期 / 釘選 | — | ✅ |
+| 新增 / 刪除專案、KOL | — | ✅ |
+| 修改共享設定（工時、不可用時段） | — | ✅ |
+
+> 權限的真正邊界在 **Supabase RLS（伺服器端）**；前端隱藏編輯 UI 僅為體驗最佳化，不可作為安全機制。
+
+### 10.6 技術選型
+
+| 需求 | 選用 | 備註 |
+|------|------|------|
+| 錯誤監控 | **Sentry** | 免費額度足夠，含 Session Replay 選項 |
+| 後端 / 儲存 | **Supabase** | Postgres + RLS + Auth + Realtime 原生整合，純前端也能安全 |
+| 身分驗證 | **Supabase Auth**（magic link） | 免密碼，免自建帳號系統 |
+| 即時同步 | **Supabase Realtime** | 多人變更即時推播 |
+| 即時編輯（選配） | Yjs / CRDT | 僅在同欄位同時編輯需求出現時 |
+
+---
+
+## 11. 附件與參考資料
 
 - 嘖嘖募資代操：工作拆解-0515.xlsx — 完整任務清單、工時估算、負責人、交付物
 - 《電商群募流群》課程模板集合區.xlsx — Kenji 版募資時間軸甘特圖（5-2 專案流程表）
