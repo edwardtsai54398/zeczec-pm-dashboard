@@ -191,6 +191,7 @@ button { cursor: pointer; }
 
 /* ╭─ hero ──────────────────────────────────────╮ */
 .hero {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 24px;
@@ -198,6 +199,13 @@ button { cursor: pointer; }
   padding: 18px 4px 28px;
 }
 .hero-left { min-width: 0; }
+/* .random-cat 不含定位，位置由使用端決定 */
+.hero .random-cat {
+  position: absolute;
+  left: 55%;
+  bottom: 0px;
+  transform: translateX(-50%);
+}
 .greeting {
   font-family: var(--font-display);
   font-weight: 400;
@@ -1024,6 +1032,8 @@ textarea.text-in { resize: vertical; min-height: 64px; }
 
 /* track body */
 .g2-track-body { position: relative; }
+/* 裝飾貓：放在甘特條空白格、位置由 JS 算好的 left/top 決定；在條上方但不擋互動 */
+.g2-track-body .g2-cat { position: absolute; z-index: 3; }
 .g2-today-line {
   position: absolute; top: 0; bottom: 0;
   width: 1.5px; background: var(--t-peach-ink);

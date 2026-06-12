@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { dBt, fmt, fmtF, pD } from '../lib/dateUtils.js';
 import { PH } from '../lib/tasks.js';
 import { getTone, WEEK, greetingFor } from './shared.js';
+import RandomCat from '../components/CatSvg/RandomCat.jsx';
 
 export function Dashboard({ projects, data, miles, onAddProject, onJump }) {
   const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
@@ -87,6 +88,7 @@ export function Dashboard({ projects, data, miles, onAddProject, onJump }) {
             今天是 {today.getMonth() + 1}/{today.getDate()} 週{WEEK[today.getDay()]} · {tdy.length} 項任務進行中 · 接下來 7 天還有 {soon.length} 項
           </p>
         </div>
+        <RandomCat />
         <div className="hero-right">
           <div className="stat">
             <div className="stat-label">進行中專案</div>

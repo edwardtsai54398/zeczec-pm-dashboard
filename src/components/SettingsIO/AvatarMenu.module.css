@@ -1,0 +1,70 @@
+/* 頭像 popover 的 scoped 樣式。未來移除「匯入/匯出設定」時連同資料夾一起刪除。 */
+
+.wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+/* 頭像本體沿用全域 .avatar 樣式,這裡只做 <button> 的重置。 */
+.trigger {
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.trigger:focus-visible {
+  outline: 2px solid var(--accent-deep);
+  outline-offset: 2px;
+}
+
+.popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 9999;
+  min-width: 168px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: popIn 0.14s ease;
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  background: transparent;
+  border-radius: var(--r-sm);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.item:hover {
+  background: var(--surface-tint);
+  color: var(--ink);
+}
+.item i {
+  font-size: 16px;
+  color: var(--ink-3);
+}
+.item:hover i {
+  color: var(--ink);
+}
