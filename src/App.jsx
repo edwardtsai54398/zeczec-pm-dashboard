@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import * as Sentry from '@sentry/react';
 import { runScheduleV2 } from './lib/schedulerV2.js';
 import { mkTasks } from './lib/schedulerV2.js';
 import { D_PROJECTS, D_SETTINGS, TONE_PALETTE, ACCENT_PALETTES, TWEAK_DEFAULTS } from './constants.js';
@@ -8,13 +9,15 @@ import { useTweaks, TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakTogg
 import { Rail } from './components/Rail.jsx';
 import { Topbar } from './components/Topbar.jsx';
 import { ConfirmModal } from './components/ConfirmModal.jsx';
+import { Report } from './components/Report/Report.jsx';
 import { Dashboard } from './views/Dashboard.jsx';
 import { Gantt } from './views/Gantt.jsx';
 import { ProjectPage } from './views/ProjectPage.jsx';
 import { KOLPage } from './views/KOLPage.jsx';
 import { SettingsPage } from './views/SettingsPage.jsx';
+import ErrorFallback from './components/ErrorFallback.jsx';
 
-export default function App() {
+function AppContent() {
   const [view, setView] = useState("dashboard");
   const [sel, setSel] = useState("saba");
   const [t, setT] = useTweaks(TWEAK_DEFAULTS);
@@ -123,6 +126,16 @@ export default function App() {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      <Report view={view} />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <Sentry.ErrorBoundary fallback={<ErrorFallback />}>
+      <AppContent />
+    </Sentry.ErrorBoundary>
   );
 }

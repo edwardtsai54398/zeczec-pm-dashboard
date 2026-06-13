@@ -1,0 +1,114 @@
+/* 「回報問題」功能的 scoped 樣式。彈窗外框沿用全域 .modal-overlay / .modal-box,
+   這裡只放回報專屬部分（右下角藥丸、textarea、動作鈕、成功訊息）。 */
+
+.fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 9990;
+  display: block;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  line-height: 0;
+  transition: transform 0.12s;
+}
+.fab:hover {
+  transform: translateY(-2px);
+}
+
+.fab:focus-visible {
+  outline: 2px solid var(--accent-deep);
+  outline-offset: 4px;
+  border-radius: 16px;
+}
+.fabArt {
+  display: block;
+  width: 200px;
+  height: auto;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.18));
+}
+
+.title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 14px;
+}
+
+.textarea {
+  display: block;
+  width: 100%;
+  min-height: 200px;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface-tint);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+  box-sizing: border-box;
+}
+.textarea::placeholder { color: var(--ink-4); }
+.textarea:focus {
+  outline: none;
+  border-color: var(--accent-deep);
+  background: var(--surface);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.btn,
+.btnPrimary {
+  padding: 10px 20px;
+  border-radius: 999px;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.btn {
+  background: var(--surface-tint);
+  color: var(--ink-2);
+}
+.btn:hover { background: var(--bg-warm); color: var(--ink); }
+.btnPrimary {
+  background: var(--accent-deep);
+  color: #fff;
+}
+.btnPrimary:hover { background: var(--accent-ink); }
+.btnPrimary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.btn:focus-visible,
+.btnPrimary:focus-visible {
+  outline: 2px solid var(--accent-deep);
+  outline-offset: 2px;
+}
+
+.success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 8px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+.success i {
+  font-size: 44px;
+  color: var(--accent-deep);
+}

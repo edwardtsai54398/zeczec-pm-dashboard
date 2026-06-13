@@ -417,6 +417,7 @@ Brief(4.5) → 腳本過稿(+5d)(4.6) → 影片過稿(+5d)(4.7) → B copy(4.8)
 
 - **Supabase Realtime** 訂閱：editor 變更後，其他人（含 viewer）畫面即時更新。
 - 避免拿到舊資料去覆蓋他人剛存的變更。
+- ⚠️ **提醒：登入後呼叫 `Sentry.setUser({ id, email })`**，登出時 `Sentry.setUser(null)`，多人情境下才能在 Sentry 看出錯誤是「誰」遇到的、影響幾人。
 
 **Phase 3 — 操作 Log / 稽核軌跡**
 
