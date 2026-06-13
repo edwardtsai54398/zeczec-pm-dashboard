@@ -5,24 +5,28 @@
 // 不會碰到 deck-stage.railVisible 等非本 App 的資料。
 //   cfpm4               → src/constants.js (STORAGE_KEY)：專案 + 設定
 //   zeczec_todo_done    → src/views/Dashboard.jsx：待辦完成狀態
-//   zeczec_overdue_done → src/views/Dashboard.jsx：逾期完成狀態
+//   zeczec_overdue_done → exportSettingssrc/views/Dashboard.jsx：逾期完成狀態
 export const APP_KEYS = ['cfpm4', 'zeczec_todo_done', 'zeczec_overdue_done'];
 
-// 把本 App 的 localStorage 內容序列化成格式化 JSON 並下載。
-export function exportSettings() {
+// 取得本 App 當前 localStorage 快照物件（匯出與回報問題共用）。
+// 本 App 的值都是 JSON 字串,parse 後放入讓輸出可讀;非 JSON 則原樣保留。
+export function getSettingsSnapshot() {
   const data = {};
   for (const key of APP_KEYS) {
     const raw = localStorage.getItem(key);
     if (raw === null) continue;
-    // 本 App 的值都是 JSON 字串,parse 後放入讓輸出檔可讀;非 JSON 則原樣保留。
     try {
       data[key] = JSON.parse(raw);
     } catch {
       data[key] = raw;
     }
   }
+  return data;
+}
 
-  const json = JSON.stringify(data, null, 2);
+// 把本 App 的 localStorage 內容序列化成格式化 JSON 並下載。
+export function exportSettings() {
+  const json = JSON.stringify(getSettingsSnapshot(), null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
