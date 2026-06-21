@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
-import { dBt, fmt, fmtF, pD } from '../lib/dateUtils.js';
-import { PH } from '../lib/tasks.js';
+import { dBt, fmt, fmtF, pD } from '../../lib/dateUtils.js';
+import { PH } from '../../lib/tasks.js';
 import { getTone, WEEK, greetingFor } from './shared.js';
-import RandomCat from '../components/CatSvg/RandomCat.jsx';
+import RandomCat from '../../components/CatSvg/RandomCat.jsx';
 
 export function Dashboard({ projects, data, miles, onAddProject, onJump }) {
   const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);

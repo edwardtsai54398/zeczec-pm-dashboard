@@ -68,3 +68,9 @@
 .item:hover i {
   color: var(--ink);
 }
+
+.divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}

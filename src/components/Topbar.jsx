@@ -10,7 +10,7 @@ export function Topbar({ projectCount, showAvatar }) {
           padding: "3px 9px", background: "white", borderRadius: 999,
           border: "1px solid var(--border)",
         }}>
-          v2 · {projectCount} 個專案
+          {projectCount} 個專案
         </span>
       </div>
       <div className="topbar-spacer"></div>

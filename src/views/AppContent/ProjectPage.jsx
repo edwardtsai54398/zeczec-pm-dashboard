@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { dBt, fmt, fmtF, pD, addD } from '../lib/dateUtils.js';
-import { BT, PH } from '../lib/tasks.js';
-import { mkTasks } from '../lib/schedulerV2.js';
+import { dBt, fmt, fmtF, pD, addD } from '../../lib/dateUtils.js';
+import { BT, PH } from '../../lib/tasks.js';
+import { mkTasks } from '../../lib/schedulerV2.js';
 import { getTone } from './shared.js';
-import { DateInput } from '../components/DateInput.jsx';
+import { DateInput } from '../../components/DateInput.jsx';
 
 export function ProjectPage({ projects, sel, setSel, onUpdate, miles, onAdd, onDelete }) {
   const p = projects.find((x) => x.id === sel);

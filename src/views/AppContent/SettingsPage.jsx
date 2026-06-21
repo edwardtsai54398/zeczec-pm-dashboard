@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DateInput } from '../components/DateInput.jsx';
+import { DateInput } from '../../components/DateInput.jsx';
 
 export function SettingsPage({ settings, onUpdate }) {
   const [newBlackout, setNewBlackout] = useState({ name: "", start: "", end: "" });

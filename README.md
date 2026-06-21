@@ -440,25 +440,14 @@ Brief(4.5) → 腳本過稿(+5d)(4.6) → 影片過稿(+5d)(4.7) → B copy(4.8)
 
 ### 10.5 關鍵設計決策
 
-**(A) 資料粒度 — 待決策**
+**(A) 資料粒度**
 
-多人編輯下，整包 JSON 覆蓋（last-write-wins）會默默蓋掉他人變更。兩條路：
-
-| 方案 | 成本 | 適用 |
-|------|------|------|
-| A. 維持 blob + 樂觀鎖（加 version 欄位，版本不符即擋下要求重載） | 低 | 幾乎不會兩人同時動同一案 |
-| B. 正規化成資料表（`projects` / `tasks` / `kols` / `settings` 各自成 row） | 中 | 多人同時編輯不同案／任務 ← **建議** |
+多人編輯下，整包 JSON 覆蓋（last-write-wins）會默默蓋掉他人變更。：正規化成資料表（`projects` / `tasks` / `kols` / `settings` 各自成 row）， 多人同時編輯不同案／任務
 
 > 建議至少正規化到 project / task 層級；row-level 後彼此不互踩，稀有真衝突以 last-write-wins-per-row 處理即可，**不需 CRDT**。最終取決於「實務上是否會多人同時各自編輯」。
 
-**(B) Settings 拆分 — 共享 vs 個人**
-
-| 類別 | 欄位 | 儲存層級 |
-|------|------|---------|
-| 共享排程參數 | `hoursPerDay`、`blackouts` | workspace（共享） |
-| 個人 UI 偏好 | `accent` 配色、`density`、`ambient`、`showAvatar`、`catEnabled`、`catCount`、主題 | per-user（個人） |
-
-> 否則一個人改主題會讓全公司跟著變。
+**(B) Settings 不拆分**
+先不做setting拆分，先以每個人看到同一份資料來做。
 
 **(C) 權限矩陣**
 

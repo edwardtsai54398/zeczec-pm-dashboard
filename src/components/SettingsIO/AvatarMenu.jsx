@@ -2,6 +2,7 @@
 // <AvatarMenu /> 改回靜態頭像、並刪掉 src/components/SettingsIO/ 即可。
 import { useState, useRef, useEffect } from 'react';
 import avatarImg from '../../assets/avatar.jpg';
+import { supabase } from '../../lib/supabaseClient.js';
 import { exportSettings, importSettings } from './settingsIO.js';
 import styles from './AvatarMenu.module.css';
 
@@ -31,6 +32,11 @@ export function AvatarMenu() {
   };
 
   const handleImportClick = () => fileRef.current?.click();
+
+  const handleSignOut = () => {
+    setOpen(false);
+    supabase.auth.signOut();
+  };
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -66,6 +72,17 @@ export function AvatarMenu() {
           <button type="button" className={styles.item} role="menuitem" onClick={handleImportClick}>
             <i className="ti ti-upload" aria-hidden="true" />
             匯入設定
+          </button>
+          <div className={styles.divider} role="separator" />
+          <button
+            type="button"
+            className={styles.item}
+            role="menuitem"
+            title="登出"
+            onClick={handleSignOut}
+          >
+            <i className="ti ti-logout" aria-hidden="true" />
+            登出
           </button>
         </div>
       )}

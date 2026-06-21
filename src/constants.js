@@ -44,6 +44,15 @@ export const D_SETTINGS = {
   ],
 };
 
+// 新使用者第一次登入時，寫進 profiles.preferences 的預設值。
+// 只放「每位使用者各自的 UI 偏好」(貓)；排程參數(hoursPerDay/blackouts)是
+// 整個 workspace 共用的，之後會放到 workspaces.settings，不在這裡。
+// 鍵名沿用 D_SETTINGS 的 camelCase，之後讀回來不必再轉欄位名。
+export const DEFAULT_PREFERENCES = {
+  catEnabled: D_SETTINGS.catEnabled,
+  catCount: D_SETTINGS.catCount,
+};
+
 export const D_PROJECTS = [
   {
     id: "saba", name: "SABA RO 飲水機", template: "full", mode: "forward",

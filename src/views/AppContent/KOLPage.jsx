@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { fmtF, pD, addD } from '../lib/dateUtils.js';
+import { fmtF, pD, addD } from '../../lib/dateUtils.js';
 import { getTone } from './shared.js';
-import { DateInput } from '../components/DateInput.jsx';
+import { DateInput } from '../../components/DateInput.jsx';
 
 const KOL_MILESTONES = [
   { id: "ship",   n: "寄出產品",      o: 0 },

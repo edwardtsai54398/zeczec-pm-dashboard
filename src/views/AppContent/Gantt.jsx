@@ -1,9 +1,9 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { dBt, addD, fmt, pD, isBO as checkBO } from '../lib/dateUtils.js';
+import { dBt, addD, fmt, pD, isBO as checkBO } from '../../lib/dateUtils.js';
 import { TONES } from './shared.js';
-import { BT } from '../lib/tasks.js';
-import { DateInput } from '../components/DateInput.jsx';
-import RandomCat from '../components/CatSvg/RandomCat.jsx';
+import { BT } from '../../lib/tasks.js';
+import { DateInput } from '../../components/DateInput.jsx';
+import RandomCat from '../../components/CatSvg/RandomCat.jsx';
 
 function TaskEditModal({ state, projects, data, onSave, onClose }) {
   const proj = projects.find((p) => p.id === state.pid);

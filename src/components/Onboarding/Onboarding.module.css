@@ -1,0 +1,67 @@
+/* 第一次登入的取名畫面 scoped 樣式。版面跟 Login 很像（置中卡片）,
+   但兩者各自獨立,之後要分開調整時不會互相牽動。 */
+
+.wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  padding: 24px;
+}
+
+.card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 36px;
+  text-align: center;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 10px;
+  font-family: var(--font-display);
+}
+
+.subtitle {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-3);
+  margin: 0 0 24px;
+}
+
+.input {
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 15px;
+  color: var(--ink);
+  background: var(--surface-soft);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  outline: none;
+  margin-bottom: 12px;
+}
+
+.primaryBtn {
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--t-olive-ink);
+  background: var(--t-lime);
+  border: none;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.err {
+  font-size: 13px;
+  color: #b4453c;
+  margin: 12px 0 0;
+}
