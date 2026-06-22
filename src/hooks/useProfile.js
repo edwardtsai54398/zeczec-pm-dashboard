@@ -1,18 +1,54 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient.js';
-import { DEFAULT_PREFERENCES } from '../constants.js';
+import { DEFAULT_PREFERENCES, DEFAULT_WORKSPACE_SETTINGS } from '../constants.js';
+import { writePreference } from '../lib/preference.js';
+import { debounce } from '../lib/debounce.js';
 
-// 登入(auth)成功 ≠ 我們資料庫裡有這個人的 profile。
-// 這個 hook 拿登入者的 id 去 profiles 表查有沒有對應的 row:
-//   查不到(或沒有 display_name) → 第一次 → 上層顯示取名畫面
-//   查得到且有名字              → 老使用者 → 直接進 App
+// onboarding 完成時，幫使用者建立自己的 workspace 與 owner 身分。
+async function ensureOwnerWorkspace(userId, workspaceName) {
+  // ① 已擁有 workspace 就沿用既有 id
+  const { data: owned, error: ownedErr } = await supabase
+    .from('workspaces')
+    .select('id')
+    .eq('owner_id', userId)
+    .limit(1)
+    .maybeSingle();
+  if (ownedErr) throw ownedErr;
+
+  let workspaceId = owned?.id;
+
+  // ② 沒有才新建一個
+  if (!workspaceId) {
+    const { data: created, error: createErr } = await supabase
+      .from('workspaces')
+      .insert({
+        name: workspaceName,
+        owner_id: userId,
+        settings: DEFAULT_WORKSPACE_SETTINGS,
+      })
+      .select('id')
+      .single();
+    if (createErr) throw createErr;
+    workspaceId = created.id;
+  }
+
+  // ③ 建立 owner membership;upsert + onConflict 確保重送不撞 UNIQUE
+  const { error: memberErr } = await supabase
+    .from('workspace_members')
+    .upsert(
+      { workspace_id: workspaceId, user_id: userId, role: 'owner' },
+      { onConflict: 'workspace_id,user_id' }
+    );
+  if (memberErr) throw memberErr;
+}
+
+// 查登入者在 profiles 表有沒有名字，藉此分辨第一次（要取名）還是老使用者。
 export function useProfile(user) {
   const [profile, setProfile] = useState(null);
   // 'loading'(查詢中) | 'ready'(查完了，profile 可能是某筆或 null)
   const [status, setStatus] = useState('loading');
 
   useEffect(() => {
-    // 沒有 user 不用查(理論上上層已擋掉，但保險)
     if (!user) {
       setProfile(null);
       setStatus('ready');
@@ -22,7 +58,6 @@ export function useProfile(user) {
     let cancelled = false;
     setStatus('loading');
 
-    // maybeSingle: 查不到回 null 而不是丟錯，正好對應新使用者
     supabase
       .from('profiles')
       .select('*')
@@ -32,6 +67,9 @@ export function useProfile(user) {
         if (cancelled) return;
         if (error) console.error('查 profile 失敗', error);
         setProfile(data ?? null);
+
+        // preferences 寫入 localStorage
+        if (data?.preferences) writePreference(data.preferences);
         setStatus('ready');
       });
 
@@ -39,26 +77,65 @@ export function useProfile(user) {
     return () => { cancelled = true; };
   }, [user?.id]);
 
-  // 第一次取名後呼叫:把名字 + 預設偏好寫進 profiles。
-  // 用 upsert(不是 insert):萬一已有空 row 或重複送出都不會撞 duplicate key。
+  // 第一次取名後呼叫:建立 profile + workspace + owner 身分,最後才把名字落地。
   const saveProfile = useCallback(async (displayName) => {
-    const { data, error } = await supabase
+    const name = displayName.trim();
+
+    // ① 先寫一筆「還沒取名」的 profile(暫不含 display_name)。
+    //    workspaces.owner_id 有 FK 指向 profiles.id,必須先有 profile row 才建得起 workspace。
+    const { error: stubErr } = await supabase
       .from('profiles')
       .upsert(
-        {
-          id: user.id,
-          email: user.email,
-          display_name: displayName.trim(),
-          preferences: DEFAULT_PREFERENCES,
-        },
+        { id: user.id, email: user.email, preferences: DEFAULT_PREFERENCES },
         { onConflict: 'id' }
-      )
+      );
+    if (stubErr) throw stubErr;
+
+    // ② 建 workspace + owner 身分(冪等,見 ensureOwnerWorkspace)。
+    await ensureOwnerWorkspace(user.id, `${name} 的工作區`);
+
+    // ③ 最後才寫 display_name:它是門禁判斷「onboarding 完成」的依據。
+    //    放最後一步,前面任何步驟失敗名字都不會被寫入,使用者重新整理仍回到取名畫面。
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ display_name: name })
+      .eq('id', user.id)
       .select()
       .single();
 
     if (error) throw error;     // 讓取名畫面顯示錯誤訊息
-    setProfile(data);           // 更新本地狀態 → 門禁自動切到 AppContent
+    setProfile(data);           // 更新狀態 → 門禁自動切到 AppContent
   }, [user]);
 
-  return { profile, status, saveProfile };
+  const writePreferenceToDb = useMemo(
+    () =>
+      debounce(async (userId, prefs) => {
+        // 寫 DB 失敗只記錄不 rollback
+        const { error } = await supabase
+          .from('profiles')
+          .update({ preferences: prefs })
+          .eq('id', userId);
+        if (error) console.error('更新偏好失敗', error);
+      }),
+    []
+  );
+
+  // 元件卸載前把還沒送出的最後一次寫入補送,避免丟失
+  useEffect(() => () => writePreferenceToDb.flush(), [writePreferenceToDb]);
+
+  // 先本地 UI 同步、DB 寫入交給 debounce,使用者體驗即時且不狂打 DB
+  const updatePreference = useCallback((patch) => {
+    if (!user) return;
+    const next = { ...DEFAULT_PREFERENCES, ...profile?.preferences, ...patch };
+
+    // 本地立即生效:localStorage + 畫面狀態
+    writePreference(next);
+    setProfile((p) => (p ? { ...p, preferences: next } : p));
+
+    writePreferenceToDb(user.id, next);
+  }, [user, profile?.preferences, writePreferenceToDb]);
+
+  const preferences = { ...DEFAULT_PREFERENCES, ...profile?.preferences };
+
+  return { profile, status, saveProfile, preferences, updatePreference };
 }

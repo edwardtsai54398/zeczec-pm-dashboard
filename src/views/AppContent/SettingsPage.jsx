@@ -1,8 +1,12 @@
 import { useState } from 'react';
 import { DateInput } from '../../components/DateInput.jsx';
+import { useAuthContext } from '../../context/AuthContext.jsx';
 
 export function SettingsPage({ settings, onUpdate }) {
   const [newBlackout, setNewBlackout] = useState({ name: "", start: "", end: "" });
+  // 貓咪是「每位使用者各自」的偏好,走 profile/DB(updatePreference 會同步 localStorage);
+  // hoursPerDay/blackouts 是 workspace 設定,沿用 settings/onUpdate。
+  const { preferences, updatePreference } = useAuthContext();
 
   const addBlackout = () => {
     if (!newBlackout.name || !newBlackout.start || !newBlackout.end) return;
@@ -35,8 +39,8 @@ export function SettingsPage({ settings, onUpdate }) {
         <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 14 }}>
           <input
             type="checkbox"
-            checked={settings.catEnabled ?? true}
-            onChange={(e) => onUpdate({ ...settings, catEnabled: e.target.checked })}
+            checked={preferences.catEnabled}
+            onChange={(e) => updatePreference({ catEnabled: e.target.checked })}
           />
           <span style={{ fontSize: 14, color: "var(--ink-2)" }}>在甘特圖顯示貓咪</span>
         </label>
@@ -44,9 +48,9 @@ export function SettingsPage({ settings, onUpdate }) {
           <input
             type="number" className="text-in"
             style={{ width: 100, fontSize: 24, fontWeight: 500, fontFamily: "var(--font-display)", textAlign: "center" }}
-            value={settings.catCount ?? 20} min={0} max={50}
-            disabled={!(settings.catEnabled ?? true)}
-            onChange={(e) => onUpdate({ ...settings, catCount: +e.target.value })}
+            value={preferences.catCount} min={0} max={50}
+            disabled={!preferences.catEnabled}
+            onChange={(e) => updatePreference({ catCount: +e.target.value })}
           />
           <span style={{ fontSize: 14, color: "var(--ink-2)" }}>隻貓咪</span>
         </div>

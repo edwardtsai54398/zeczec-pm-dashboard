@@ -5,7 +5,7 @@ import { usePersistence } from '../../hooks/usePersistence.js';
 import { useTheme } from '../../hooks/useTheme.js';
 import { useTweaks, TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakToggle } from '../../tweaks-panel.jsx';
 import { Rail } from '../../components/Rail.jsx';
-import { Topbar } from '../../components/Topbar.jsx';
+import { Topbar } from '../../components/Topbar/index.jsx';
 import { ConfirmModal } from '../../components/ConfirmModal.jsx';
 import { Report } from '../../components/Report/Report.jsx';
 import { Dashboard } from './Dashboard.jsx';

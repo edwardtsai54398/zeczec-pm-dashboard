@@ -6,9 +6,9 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const { session, loading } = useAuth();
-  const { profile, status: profileStatus, saveProfile } = useProfile(session?.user);
+  const { profile, status: profileStatus, saveProfile, preferences, updatePreference } = useProfile(session?.user);
 
-  const value = { session, loading, profile, profileStatus, saveProfile };
+  const value = { session, loading, profile, profileStatus, saveProfile, preferences, updatePreference };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

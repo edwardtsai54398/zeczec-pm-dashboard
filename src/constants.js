@@ -3,6 +3,7 @@ import { BT } from './lib/tasks.js';
 
 export const STORAGE_KEY = "cfpm4";
 
+
 export const TONE_PALETTE = ["lavender", "lime", "peach", "sky", "rose", "olive"];
 
 export const ACCENT_PALETTES = [
@@ -36,21 +37,20 @@ export const NAV = [
 
 export const D_SETTINGS = {
   hoursPerDay: 8,
-  catEnabled: true,
-  catCount: 20,
-  blackouts: [
-    { id: "1", name: "出國",     start: "2026-06-20", end: "2026-06-26" },
-    { id: "2", name: "員工旅遊", start: "2026-07-10", end: "2026-07-16" },
-  ],
+  blackouts: [],
 };
 
-// 新使用者第一次登入時，寫進 profiles.preferences 的預設值。
-// 只放「每位使用者各自的 UI 偏好」(貓)；排程參數(hoursPerDay/blackouts)是
-// 整個 workspace 共用的，之後會放到 workspaces.settings，不在這裡。
-// 鍵名沿用 D_SETTINGS 的 camelCase，之後讀回來不必再轉欄位名。
+// 每位使用者各自的 UI 偏好(貓)單獨存一個 key,與 workspace 共用的 cfpm4(專案+排程設定)分開。
+export const PREFERENCE_KEY = "preference";
+
 export const DEFAULT_PREFERENCES = {
-  catEnabled: D_SETTINGS.catEnabled,
-  catCount: D_SETTINGS.catCount,
+  catEnabled: true,
+  catCount: 20,
+};
+
+export const DEFAULT_WORKSPACE_SETTINGS = {
+  hoursPerDay: D_SETTINGS.hoursPerDay,
+  blackouts: D_SETTINGS.blackouts,
 };
 
 export const D_PROJECTS = [

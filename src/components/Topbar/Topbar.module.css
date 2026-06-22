@@ -1,0 +1,36 @@
+/* Topbar:頂部列。scope 了「專案數徽章」與「工作區名稱藥丸」兩個固定可重用版面,
+   依規範從原本的 inline style 物件移進這裡。 */
+
+/* 專案數徽章(沿用原 inline style 的數值) */
+.countBadge {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-3);
+  padding: 3px 9px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+/* 取代搜尋按鈕的藥丸:顯示工作區名稱 */
+.workspacePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  height: 40px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+/* 名稱過長時截斷,避免把藥丸撐爆版面 */
+.workspaceName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

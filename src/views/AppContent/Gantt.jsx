@@ -4,6 +4,7 @@ import { TONES } from './shared.js';
 import { BT } from '../../lib/tasks.js';
 import { DateInput } from '../../components/DateInput.jsx';
 import RandomCat from '../../components/CatSvg/RandomCat.jsx';
+import { readPreference } from '../../lib/preference.js';
 
 function TaskEditModal({ state, projects, data, onSave, onClose }) {
   const proj = projects.find((p) => p.id === state.pid);
@@ -181,13 +182,14 @@ function mulberry32(seed) {
   };
 }
 
-// 每次「整頁載入」隨機一次的種子：在模組首次被載入時求值，之後元件重繪、
-// 切出分頁再切回（unmount/remount）都沿用同值，唯有重新整理頁面才會改變。
-// 混入貓咪佈局的 seed，使同版面在不同次開啟 app 時位置不同，但同一 session 內穩定。
+// 每次「整頁載入」隨機一次的 seed、
 const SESSION_CAT_SEED = (Math.random() * 4294967296) >>> 0;
 
 export function Gantt({ projects, data, onPinUpdate, settings }) {
   const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+
+  // 貓咪偏好直接讀本地快取(localStorage)。
+  const pref = useMemo(readPreference, []);
 
   const [zoomIdx, setZoomIdx] = useState(1);
   const zoom = ZOOM_LEVELS[zoomIdx];
@@ -377,8 +379,8 @@ export function Gantt({ projects, data, onPinUpdate, settings }) {
   // 切換疊圖 / 換週 / 縮放都會重算重排。嚴格不重疊，放不下就少放。
   // 用 seeded PRNG（mulberry32）保持 render 純淨：依 deps 重現、re-render 不亂跳。
   const catPlacements = useMemo(() => {
-    const catEnabled = settings?.catEnabled ?? true;
-    const catCount = settings?.catCount ?? 20;
+    const catEnabled = pref.catEnabled;
+    const catCount = pref.catCount;
     if (!catEnabled) return [];
 
     // 1. 建立佔用表：每列是 banner（整列禁放）或 { cols:Set<欄位> }
@@ -461,7 +463,7 @@ export function Gantt({ projects, data, onPinUpdate, settings }) {
       }
     }
     return placed;
-  }, [overlayMode, normalGroups, overlayRows, viewStart, VIEW_DAYS, COL_W, settings?.catEnabled, settings?.catCount]);
+  }, [overlayMode, normalGroups, overlayRows, viewStart, VIEW_DAYS, COL_W, pref.catEnabled, pref.catCount]);
 
   const milestones = useMemo(() => {
     const ms = [];
