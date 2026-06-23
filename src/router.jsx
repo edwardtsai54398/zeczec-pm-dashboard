@@ -2,7 +2,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { ProtectedLayout } from './views/ProtectedLayout.jsx';
 import { LoginRoute, OnboardingRoute } from './views/AuthRoutes.jsx';
 import { DashboardRoute, GanttRoute, KOLRoute, SettingsRoute } from './views/AppContent/routes.jsx';
-import { ProjectPage } from './views/AppContent/ProjectPage.jsx';
+import { ProjectPage } from './views/AppContent/ProjectPage/index.jsx';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginRoute /> },

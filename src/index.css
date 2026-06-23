@@ -107,6 +107,7 @@ button { cursor: pointer; }
 
 .rail-nav { display: flex; flex-direction: column; gap: 10px; flex: 1; }
 .rail-btn {
+  text-decoration: none;
   width: 44px; height: 44px;
   border-radius: 50%;
   border: none;

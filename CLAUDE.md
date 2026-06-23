@@ -13,6 +13,10 @@ ComponentName/
 └─ ComponentName.module.css  ← 該元件專屬的 scoped 樣式
 ```
 
+- 光把 JSX 和 CSS 拆成兩個檔案還不夠,**一定要再用同名資料夾包起來**。
+  ❌ `ProjectPage.jsx` + `ProjectPage.module.css` 平放在同一層;
+  ✅ `ProjectPage/index.jsx` + `ProjectPage/ProjectPage.module.css`。
+
 - 進入點檔名固定是 `index.jsx`,匯入時寫完整路徑:`./components/ComponentName/index.jsx`。
 - CSS 檔用**元件名稱**命名(`ComponentName.module.css`),不要用 `index.module.css`。
   與現有 `Report/Report.module.css`、`SettingsIO/AvatarMenu.module.css` 一致。
@@ -62,7 +66,7 @@ const wrap = { minHeight: '100vh', display: 'flex', ... };
 ## 其他慣例
 
 - 元件用**具名匯出**:`export function Foo() {}`(預設匯出只用在像 ErrorFallback 這種既有檔)。
-- 註解用**繁體中文**,而且寫「為什麼」而不是「做什麼」,維持現有檔案的註解密度。
+- 註解用**繁體中文**,而且寫「為什麼」而不是「做什麼」,只在邏輯不直觀處註解,簡單程式碼不加。
 - 每個 `.module.css` 開頭放一行註解,說明這支樣式 scope 了哪個元件、放了什麼。
 - 測試放在元件旁的 `__tests__/` 資料夾,檔名 `ComponentName.test.jsx`。
 - import 路徑帶副檔名(`.js` / `.jsx`),與現有檔案一致。

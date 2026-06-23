@@ -16,23 +16,11 @@
 
 因此需要一套專案管理系統，能自動排程、管理多案件時間軸、追蹤 KOL 合作進度，並在隨時有變動時快速調整。
 
-### 1.1 案件概要（範例）
-
-> 以下三檔案件僅為範例，系統應支援動態新增任意案件。
-
-| 案件名稱 | 模板 | 排程模式 | 電檢狀態 | 備註 |
-|---------|------|---------|---------|------|
-| SABA RO 飲水機 | 全自操 | 正推 | 已完成 | 可立刻啟動，需自行拍攝商品照/影片 |
-| BleeqUP AI眼鏡 | PM模式 | 反推 | 未通過 | 問卷已完成。不拍攝，用原廠素材。電檢預計 2-3 個月 |
-| INMO AI眼鏡 | PM模式 | 反推 | 未通過 | 不拍攝，用原廠素材。與 BleeqUP 同廠商送檢 |
-
-### 1.2 使用者工作參數
+### 1.1 使用者工作參數
 
 - 每日可用工時：8 小時
 - 工作日：週一至週五（週末不工作）
-- 已知不可用時段：6/20–6/26 出國（可能安排職代）、7/10–7/16 員工旅遊（全公司出國）
-- 品牌端審稿一輪：抓 3 個工作天
-- 設計師外包交稿：依任務 1–7 個工作天不等
+- 不可用時段：依使用者實際行程於設定頁新增（如出國、員工旅遊等），排程自動跳過該區間
 
 ---
 
@@ -48,7 +36,7 @@
 |---|------|------|
 | F1 | 多案件甘特圖 | 所有專案並列的時間軸，有今日標記線、走期里程碑標記（問卷/開賣/結束） |
 | F2 | 自動依賴排程引擎 | 基於任務依賴關係拓撲排序，考慮工時容量、等待天數、跨案件產能分配 |
-| F3 | 雙向排程模式 | 正推（A 模式）：從啟動日推算最快上線時間。反推（B 模式）：從目標上線日反推啟動時間 |
+| F3 | 正推排程模式 | 從啟動日往後推算任務時間軸與最快上線日（早期規劃的反推模式已移除，詳見 4.1） |
 | F4 | 走期設定 | 問卷上線/結束日、募資上線/結束日，排程引擎依走期錨定任務時間 |
 | F5 | 任務模板與勾選 | 「全自操」與「PM 模式」兩種模板，建案時套用再微調。每項任務可勾選啟用/停用 |
 | F6 | KOL 個別時程管理 | 每位 KOL 獨立里程碑（9 個節點），填入寄出日期自動推算，可個別調整 |
@@ -59,7 +47,7 @@
 
 - [✅] F1 多案件甘特圖
 - [✅] F2 自動依賴排程引擎
-- [✅] F3 雙向排程模式
+- [✅] F3 正推排程模式
 - [✅] F4 走期設定
 - [✅] F5 任務模板與勾選
 - [✅] F6 KOL 個別時程管理
@@ -147,9 +135,7 @@ Brief(4.5) → 腳本過稿(+5d)(4.6) → 影片過稿(+5d)(4.7) → B copy(4.8)
 
 ## 4. 排程引擎規格
 
-### 4.1 正推模式（A 模式）
-
-適用場景：產品已通過電檢，可立刻啟動的案件（如 SABA）。
+### 4.1 排程運算（正推，目前唯一模式）
 
 - [✅] 使用者輸入「專案啟動日」
 - [✅] 系統依任務依賴關係進行拓撲排序
@@ -157,19 +143,9 @@ Brief(4.5) → 腳本過稿(+5d)(4.6) → 影片過稿(+5d)(4.7) → B copy(4.8)
 - [✅] 考量每日工時上限（8hr）、週末、不可用時段
 - [✅] 標記為「問卷前」的任務完成後，系統推算「最快可問卷上線日」
 - [✅] 標記為「開賣前」的任務完成後，系統推算「最快可募資上線日」
-- [✅] 使用者確認後填入走期，排程自動校正
+- [✅] 使用者填入走期後，排程自動校正
 
-### 4.2 反推模式（B 模式）
-
-適用場景：已知目標上線時間，需反推最晚啟動日的案件（如 BleeqUP、INMO）。
-
-- [✅] 使用者輸入「目標募資上線日」（及可選的「問卷上線日」）
-- [✅] 系統計算所有「開賣前」任務的總工時與等待天數
-- [✅] 從問卷上線日或募資上線日往前反推，算出最晚啟動日
-- [✅] 使用者可手動將啟動日設定得更早，增加緩衝時間
-- [✅] 當啟動日早於系統建議日，多出的時間自動分散到各任務之間
-
-### 4.3 走期錨定邏輯
+### 4.2 走期錨定邏輯
 
 | 走期欄位 | 影響的任務 | 排程行為 |
 |---------|----------|---------|
@@ -182,7 +158,7 @@ Brief(4.5) → 腳本過稿(+5d)(4.6) → 影片過稿(+5d)(4.7) → B copy(4.8)
 
 - [✅] 走期錨定邏輯實作
 
-### 4.4 跨案件產能分配
+### 4.3 跨案件產能分配
 
 - [✅] 所有專案共用同一個 dailyLoad 容量池
 - [✅] 每日上限 = hoursPerDay（預設 8），跨案件任務合計不超過此上限
@@ -262,7 +238,7 @@ Brief(4.5) → 腳本過稿(+5d)(4.6) → 影片過稿(+5d)(4.7) → B copy(4.8)
 |------|------|
 | 總覽 | 今日日期 + 今日任務清單 + 未來 7 天待辦 + 各案里程碑總覽（問卷/募資上線日與系統推算日） |
 | 甘特圖 | 多專案並列時間軸，各案件獨立顏色，今日紅線標記，走期里程碑虛線標記 |
-| 專案 | 排程模式切換 + 走期日期輸入 + 模板切換 + 任務清單勾選（依階段摺疊），每項任務顯示工時、等待天數、deadline 標籤 |
+| 專案 | 走期日期輸入 + 模板切換 + 任務清單勾選（依階段摺疊），每項任務顯示工時、等待天數、deadline 標籤（已無排程模式切換） |
 | KOL | 按專案切換 + 新增 KOL（名稱/波段）+ 每位 KOL 的 9 個里程碑日期輸入 + 自動推算 |
 | 設定 | 每日工時上限調整 + 不可用時段管理（新增/刪除） |
 
@@ -277,8 +253,7 @@ Brief(4.5) → 腳本過稿(+5d)(4.6) → 影片過稿(+5d)(4.7) → B copy(4.8)
 ### 7.2 關鍵互動行為
 
 - [✅] 專案管理頁：修改任何日期或勾選任務後，排程引擎即時重算，甘特圖即時更新
-- [✅] 正推模式：系統在走期欄位下方提示「最快可上線日」
-- [✅] 反推模式：系統在啟動日欄位下方提示「建議啟動日」
+- [✅] 系統在啟動日欄位下方提示「建議啟動日」，在走期欄位下方提示「建議上線日」
 - [✅] 任務清單：每個階段可摺疊/展開，顯示啟用數量
 - [✅] KOL 管理：填入「寄出產品」日期後，未填寫的節點自動帶入推算日期
 - [✅] 甘特圖：hover 任務 bar 顯示 tooltip（任務名 + 日期區間 + 工時）
@@ -294,7 +269,6 @@ Brief(4.5) → 腳本過稿(+5d)(4.6) → 影片過稿(+5d)(4.7) → B copy(4.8)
 | id | string | 專案唯一識別碼 |
 | name | string | 專案名稱（可編輯） |
 | template | "full" \| "pm" | 模板類型 |
-| mode | "forward" \| "backward" | 排程模式 |
 | startDate | string (YYYY-MM-DD) | 專案啟動日 |
 | surveyStart | string | 問卷上線日 |
 | surveyEnd | string | 問卷結束日 |
@@ -355,7 +329,7 @@ Brief(4.5) → 腳本過稿(+5d)(4.6) → 影片過稿(+5d)(4.7) → B copy(4.8)
   - 取代舊的「逐專案串行排程」，讓晚啟動的案件從自己的 startDate 起與其他案件公平競爭
 - [✅] 容量控制：每日累計工時不超過 hoursPerDay，跨所有專案共用同一 load map
 - [✅] 等待天數：任務完成後 +N 個工作天才觸發下一個依賴（waitEnd = aWD(tE, w, bl)）
-- [✅] 反推模式：先估算總工時 + 等待天數，從目標日期往前扣除
+- [✅] 建議啟動日 / 建議上線日：由排程結果反算後僅作為 UI 提示，不影響排程
 - [✅] 安全迴圈上限：while 迴圈加 safety counter 防無限迴圈（任務池：`pool.length² + 10`；單任務分配：500）
 - [] **未來升級方案 C**：將 `schedulePool` 的 while 迴圈替換為 min-heap 事件模擬器，支援任務完成後即時動態調整後繼優先度；其餘四個純函式（`isReady`、`calcPriority`、`allocateTask`、`reshapeResult`）介面不變
 
@@ -446,10 +420,7 @@ Brief(4.5) → 腳本過稿(+5d)(4.6) → 影片過稿(+5d)(4.7) → B copy(4.8)
 
 > 建議至少正規化到 project / task 層級；row-level 後彼此不互踩，稀有真衝突以 last-write-wins-per-row 處理即可，**不需 CRDT**。最終取決於「實務上是否會多人同時各自編輯」。
 
-**(B) Settings 不拆分**
-先不做setting拆分，先以每個人看到同一份資料來做。
-
-**(C) 權限矩陣**
+**(B) 權限矩陣**
 
 | 操作 | viewer | editor |
 |------|:------:|:------:|
@@ -469,6 +440,87 @@ Brief(4.5) → 腳本過稿(+5d)(4.6) → 影片過稿(+5d)(4.7) → B copy(4.8)
 | 身分驗證 | **Supabase Auth**（magic link） | 免密碼，免自建帳號系統 |
 | 即時同步 | **Supabase Realtime** | 多人變更即時推播 |
 | 即時編輯（選配） | Yjs / CRDT | 僅在同欄位同時編輯需求出現時 |
+
+### 10.7 資料庫 Schema（Phase 1 實作）
+
+> Phase 1 在 Supabase（Postgres）上採 **project-row 粒度**：一個專案一個 row，
+> 專案內的 `tasks` / `kols` 等以 JSONB 整包存在 `data` 欄位。比起把任務完全正規化簡單許多，
+> 又能避免「不同人各自編輯不同專案」時整包覆蓋互踩（呼應 10.5(A)）。
+> 權限的真正邊界一律落在 Supabase **RLS（伺服器端）**，前端隱藏 UI 僅為體驗。
+
+> **設定拆成兩處**：排程參數（`hoursPerDay` / `blackouts`，整個工作區共用）放 `workspaces.settings`；
+> 每位使用者各自的 UI 偏好（貓 `catEnabled` / `catCount`）放 `profiles.preferences`。
+> 判準：「另一位檢視者會希望這個值一模一樣嗎？」是→workspace，否→profile。
+
+共 5 張表：`profiles`、`workspaces`、`workspace_members`、`projects`、`user_workspace_state`。
+
+#### profiles — 每位使用者一筆
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | **等於 `auth.users.id`**（非自動產生）；FK 指向 `auth.users` |
+| email | text | 登入信箱 |
+| display_name | text | 顯示名稱；onboarding 取名前為空。**「onboarding 是否完成」以此欄位是否有值判定** |
+| preferences | jsonb | 個人 UI 偏好 `{ catEnabled, catCount }` |
+| created_at | timestamptz | |
+
+> profile 由**前端第一次登入時建立**（`useProfile.saveProfile` 用 `upsert`），不靠 DB signup trigger。
+
+#### workspaces — 每個工作區一筆
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | |
+| name | text | 工作區名稱（onboarding 時帶入「○○ 的工作區」） |
+| owner_id | uuid | FK → `profiles.id`（故須先有 profile row 才建得起 workspace） |
+| settings | jsonb | 工作區共用排程參數 `{ hoursPerDay, blackouts }` |
+| created_at | timestamptz | |
+
+#### workspace_members — 成員與角色（RLS 依此判權限）
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | |
+| workspace_id | uuid | FK → `workspaces.id` |
+| user_id | uuid | FK → `profiles.id` |
+| role | enum / text + CHECK | `owner` \| `editor` \| `viewer`（**非自由字串**，RLS 會讀它） |
+| created_at | timestamptz | |
+| | | **UNIQUE(workspace_id, user_id)** — 一人在一工作區只一筆 |
+
+#### projects — 每個專案一筆，內容整包進 `data`
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid (PK) | |
+| workspace_id | uuid | FK → `workspaces.id` |
+| name | text | 專案名稱 |
+| position | int | 顯示排序 |
+| data | jsonb | 專案內容整包（見下） |
+| version | int (default 0) | **樂觀鎖**；存檔時 `UPDATE … WHERE version = x`，0 列符合（PGRST116）即代表被別人先改 → 擋下 |
+| is_archived | boolean (default false) | 封存（軟刪除）；刪除即設為 `true`，查詢只取 `false` |
+| created_at / updated_at | timestamptz | |
+| created_by / updated_by | uuid | FK → `profiles.id` |
+
+`data` JSONB 內容（對應 [src/lib/projectMapping.js](src/lib/projectMapping.js) 的 `DATA_FIELDS`）：
+
+```
+template, startDate, surveyStart, surveyEnd, campaignStart, campaignEnd,
+tone, color, tasks[], kols[], notes
+```
+
+> 已移除舊有的 `mode`（正推/反推）。各欄位語意見第 8 章資料模型。
+
+#### user_workspace_state — 每位使用者各自的「完成狀態」（設計中，尚未接線）
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| user_id | uuid | FK → `profiles.id` |
+| workspace_id | uuid | FK → `workspaces.id` |
+| state | jsonb | `{ todo_done, overdue_done }` |
+| | | **PK(user_id, workspace_id)** |
+
+> ⚠️ 此表已在 schema 設計內，但**程式尚未接線**：今日總覽的待辦完成狀態目前仍存在
+> localStorage（`zeczec_todo_done` / `zeczec_overdue_done`），雲端化延後處理。
 
 ---
 
