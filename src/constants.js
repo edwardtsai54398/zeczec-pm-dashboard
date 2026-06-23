@@ -55,7 +55,7 @@ export const DEFAULT_WORKSPACE_SETTINGS = {
 
 export const D_PROJECTS = [
   {
-    id: "saba", name: "SABA RO 飲水機", template: "full", mode: "forward",
+    id: "saba", name: "SABA RO 飲水機", template: "full",
     startDate: "2026-05-19", surveyStart: "", surveyEnd: "",
     campaignStart: "", campaignEnd: "",
     tone: "lavender", color: "#7F77DD",
@@ -63,7 +63,7 @@ export const D_PROJECTS = [
     notes: "電檢完成，可立刻啟動",
   },
   {
-    id: "bleeq", name: "BleeqUP AI 眼鏡", template: "pm", mode: "backward",
+    id: "bleeq", name: "BleeqUP AI 眼鏡", template: "pm",
     startDate: "", surveyStart: "", surveyEnd: "",
     campaignStart: "", campaignEnd: "",
     tone: "lime", color: "#1D9E75",
@@ -72,7 +72,7 @@ export const D_PROJECTS = [
     notes: "電檢未通過。不拍攝，用原廠素材",
   },
   {
-    id: "inmo", name: "INMO AI 眼鏡", template: "pm", mode: "backward",
+    id: "inmo", name: "INMO AI 眼鏡", template: "pm",
     startDate: "", surveyStart: "", surveyEnd: "",
     campaignStart: "", campaignEnd: "",
     tone: "peach", color: "#D85A30",

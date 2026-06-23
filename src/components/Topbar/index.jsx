@@ -1,9 +1,9 @@
 import { AvatarMenu } from "../SettingsIO/AvatarMenu.jsx";
-import { useOwnerWorkspace } from "../../hooks/useOwnerWorkspace.js";
+import { useAuthContext } from "../../context/AuthContext.jsx";
 import styles from "./Topbar.module.css";
 
 export function Topbar({ projectCount, showAvatar }) {
-  const workspaces = useOwnerWorkspace();
+  const { workspaces } = useAuthContext();
   const workspaceName = workspaces[0]?.name;
 
   return (

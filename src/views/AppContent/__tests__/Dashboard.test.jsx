@@ -25,7 +25,6 @@ function renderDashboard(projects, data) {
       projects={projects}
       data={data}
       miles={{}}
-      onAddProject={() => {}}
       onJump={() => {}}
     />,
   );

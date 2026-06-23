@@ -1,0 +1,65 @@
+/* ProjectPage:專案詳情頁的頂部標題列。scope 了「色點 + 名稱 + 模板切換 + 儲存/封存」
+   這排版面 —— 模板切換鈕緊貼名稱右側,儲存/封存靠最右(儲存在封存左邊)。 */
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+/* 專案代表色圓點。背景與邊框色是執行期由 tone 算出 → 留 inline style 帶入。 */
+.dot {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid;
+}
+
+/* 名稱輸入框:不再吃滿整列(拿掉舊的 flex:1),改為自適應寬度,
+   讓模板切換鈕能緊貼在名稱右邊。 */
+.name {
+  flex: 0 1 auto;
+  min-width: 140px;
+  max-width: 360px;
+  font-size: 22px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  outline: none;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  letter-spacing: -0.01em;
+}
+
+/* margin-right:auto 把後面的儲存/封存鈕推到最右,模板鈕本身留在名稱旁。 */
+.toggle {
+  margin-bottom: 0;
+  margin-right: auto;
+}
+
+.saveBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent-deep);
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: opacity .12s;
+}
+.saveBtn:hover { opacity: .9; }
+.saveBtn:disabled { opacity: .55; cursor: default; }
+
+/* 儲存失敗的一次性錯誤訊息(錯誤紅為允許寫死的一次性強調色)。 */
+.saveErr {
+  color: #b4453c;
+  font-size: 12px;
+  margin: -6px 0 12px;
+}

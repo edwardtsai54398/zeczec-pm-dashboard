@@ -374,15 +374,6 @@ button { cursor: pointer; }
 .ms-row .lbl { color: var(--ink-2); }
 .ms-row .val { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
 .ms-row .val.pend { color: var(--ink-3); font-weight: 400; }
-.ms-mode {
-  font-size: 10px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-weight: 500;
-  letter-spacing: 0;
-}
-.ms-mode.forward { background: var(--t-lime); color: var(--t-lime-ink); }
-.ms-mode.backward { background: var(--t-sky); color: var(--t-sky-ink); }
 
 /* ╭─ timeline card (right) ──────────────────────╮ */
 .tl-card { min-height: 380px; display: flex; flex-direction: column; }
@@ -577,26 +568,6 @@ button { cursor: pointer; }
   background: rgba(255,255,255,.16); font-weight: 500;
 }
 .proj-tab:not(.active) .badge { background: var(--surface-tint); color: var(--ink-2); }
-
-.mode-card {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-.mode-opt {
-  padding: 14px 16px;
-  border-radius: var(--r);
-  border: 1.5px solid var(--border);
-  background: white;
-  text-align: left;
-  transition: all .15s;
-  cursor: pointer;
-}
-.mode-opt:hover { border-color: var(--border-strong); }
-.mode-opt.active { border-color: var(--ink); background: var(--ink); color: white; }
-.mode-opt .lbl { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
-.mode-opt .desc { font-size: 11px; opacity: .65; }
 
 .date-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .date-cell {

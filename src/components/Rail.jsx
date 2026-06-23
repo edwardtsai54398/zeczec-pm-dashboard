@@ -1,6 +1,7 @@
+import { NavLink } from 'react-router-dom';
 import { NAV } from '../constants.js';
 
-export function Rail({ view, onNavigate }) {
+export function Rail() {
   return (
     <aside className="rail">
       <div className="rail-mark" title="募資專案管理">
@@ -9,14 +10,14 @@ export function Rail({ view, onNavigate }) {
       <div className="rail-divider"></div>
       <nav className="rail-nav">
         {NAV.map((n) => (
-          <button
+          <NavLink
             key={n.k}
-            className={`rail-btn ${view === n.k ? "active" : ""}`}
-            onClick={() => onNavigate(n.k)}
+            to={`/${n.k}`}
+            className={({ isActive }) => `rail-btn ${isActive ? "active" : ""}`}
             title={n.label}
           >
             <i className={`ti ti-${n.icon}`}></i>
-          </button>
+          </NavLink>
         ))}
       </nav>
       <div className="rail-tail">

@@ -1,32 +1,16 @@
 import * as Sentry from '@sentry/react';
-import { AuthProvider, useAuthContext } from './context/AuthContext.jsx';
-import { Login } from './components/Login/index.jsx';
-import { Onboarding } from './components/Onboarding/index.jsx';
+import { RouterProvider } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext.jsx';
 import ErrorFallback from './components/ErrorFallback.jsx';
-import { AppContent } from './views/AppContent/index.jsx';
+import { router } from './router.jsx';
 
-const Loading = () => (
-  <div style={{ padding: 60, textAlign: "center", color: "var(--ink-3)" }}>載入中…</div>
-);
-
-//   還在問 Supabase 登入狀態 / 還在查 profile → 載入中
-//   沒有 session                           → 登入頁
-//   有 session 但 profile 沒名字(新使用者)    → 取名畫面
-//   profile 完整                           → 進 App
-function Gate() {
-  const { session, loading, profile, profileStatus, saveProfile } = useAuthContext();
-
-  if (loading || profileStatus === 'loading') return <Loading />;
-  if (!session) return <Login />;
-  if (!profile || !profile.display_name) return <Onboarding onDone={saveProfile} />;
-  return <AppContent />;
-}
-
+// 登入/取名/換頁全部交給 router;auth 狀態仍由 AuthProvider 提供,
+// 各路由(ProtectedLayout / LoginRoute / OnboardingRoute)自己讀 context 決定要不要跳轉。
 export default function App() {
   return (
     <Sentry.ErrorBoundary fallback={<ErrorFallback />}>
       <AuthProvider>
-        <Gate />
+        <RouterProvider router={router} />
       </AuthProvider>
     </Sentry.ErrorBoundary>
   );

@@ -4,7 +4,7 @@ import { PH } from '../../lib/tasks.js';
 import { getTone, WEEK, greetingFor } from './shared.js';
 import RandomCat from '../../components/CatSvg/RandomCat.jsx';
 
-export function Dashboard({ projects, data, miles, onAddProject, onJump }) {
+export function Dashboard({ projects, data, miles, onJump }) {
   const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
   const hr = new Date().getHours();
 
@@ -98,9 +98,6 @@ export function Dashboard({ projects, data, miles, onAddProject, onJump }) {
             <div className="stat-label">本週工時</div>
             <div className="stat-value">{Math.round(weekHours)}<span className="unit">hr</span><i className="ti ti-arrow-up-right"></i></div>
           </div>
-          <button className="cta-primary" onClick={onAddProject}>
-            <i className="ti ti-plus"></i>新增專案
-          </button>
         </div>
       </section>
 
@@ -133,9 +130,6 @@ function MilestonesCard({ projects, miles, onJump }) {
               <div className="ms-bubble-head">
                 <span className="dot" style={{ background: tone.bg }}></span>
                 <span style={{ flex: 1 }}>{p.name}</span>
-                <span className={`ms-mode ${p.mode === "forward" ? "forward" : "backward"}`}>
-                  {p.mode === "forward" ? "正推" : "反推"}
-                </span>
               </div>
               <div className="ms-row">
                 <span className="lbl">問卷上線</span>

@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react';
 import { useAuth } from '../hooks/useAuth.js';
 import { useProfile } from '../hooks/useProfile.js';
+import { useOwnerWorkspace } from '../hooks/useOwnerWorkspace.js';
 
 const AuthContext = createContext(null);
 
@@ -8,7 +9,14 @@ export function AuthProvider({ children }) {
   const { session, loading } = useAuth();
   const { profile, status: profileStatus, saveProfile, preferences, updatePreference } = useProfile(session?.user);
 
-  const value = { session, loading, profile, profileStatus, saveProfile, preferences, updatePreference };
+  // Topbar 工作區
+  const workspaces = useOwnerWorkspace(session?.user?.id);
+  const workspaceId = workspaces[0]?.id ?? null;
+
+  const value = {
+    session, loading, profile, profileStatus, saveProfile, preferences, updatePreference,
+    workspaces, workspaceId,
+  };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

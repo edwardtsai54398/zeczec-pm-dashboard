@@ -1,14 +1,101 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams, useNavigate, useBlocker, Navigate } from 'react-router-dom';
 import { dBt, fmt, fmtF, pD, addD } from '../../lib/dateUtils.js';
 import { BT, PH } from '../../lib/tasks.js';
 import { mkTasks } from '../../lib/schedulerV2.js';
+import { TONE_PALETTE } from '../../constants.js';
+import { useWorkspace } from '../../context/WorkspaceContext.jsx';
+import { useProjectEditor } from '../../hooks/useProjectEditor.js';
 import { getTone } from './shared.js';
 import { DateInput } from '../../components/DateInput.jsx';
+import { ConfirmModal } from '../../components/ConfirmModal.jsx';
+import { UnsavedChangesModal } from '../../components/UnsavedChangesModal.jsx';
+import styles from './ProjectPage.module.css';
 
-export function ProjectPage({ projects, sel, setSel, onUpdate, miles, onAdd, onDelete }) {
-  const p = projects.find((x) => x.id === sel);
-  if (!projects.length) {
+// 新專案的預設值
+function makeNewProject(projects) {
+  const tone = TONE_PALETTE[projects.length % TONE_PALETTE.length];
+  return {
+    name: '新專案', template: 'full',
+    startDate: '', surveyStart: '', surveyEnd: '',
+    campaignStart: '', campaignEnd: '',
+    tone, tasks: mkTasks('full'), kols: [], notes: '',
+    position: projects.length, is_archive: false, version: 0,
+  };
+}
+
+// isNew 時(/project/new)則是草稿。
+export function ProjectPage({ isNew = false }) {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const {
+    projects, setProjects, miles,
+    saveProjectToCloud, insertProjectToCloud, archiveProjectInCloud,
+  } = useWorkspace();
+  
+  // 專案頁的草稿/dirty/儲存
+  const editor = useProjectEditor({
+    projects, sel: id, setProjects, saveProjectToCloud,
+    isNew, makeDraft: () => makeNewProject(projects), insertProjectToCloud,
+  });
+  const [archiveTarget, setArchiveTarget] = useState(null);
+  
+  const skipBlockerRef = useRef(false);
+  
+  // 離開前有未存變更時用 useBlocker 攔下。
+  const blocker = useBlocker(
+    useCallback(
+      ({ currentLocation, nextLocation }) =>
+        editor.dirty && !skipBlockerRef.current && currentLocation.pathname !== nextLocation.pathname,
+      [editor.dirty],
+    ),
+  );
+  
+  // 放行旗標用過即收,否則目的頁的 blocker 會一直被停用。
+  useEffect(() => { skipBlockerRef.current = false; }, [id, isNew]);
+  
+  // 新增模式按「儲存」:insert 拿回真 uuid 後導到正式網址(放行 blocker)
+  const handleNewSave = useCallback(async () => {
+    const created = await editor.save();
+    if (created) {
+      skipBlockerRef.current = true;
+      navigate(`/project/${created.id}`, { replace: true });
+    }
+  }, [editor, navigate]);
+  
+  // 取消:丟棄草稿直接離開
+  const handleCancel = useCallback(() => {
+    skipBlockerRef.current = true;
+    navigate(projects.length ? '/project' : '/dashboard');
+  }, [navigate, projects.length]);
+  
+  // 重整/關分頁的提醒
+  useEffect(() => {
+    if (!editor.dirty) return;
+    const onBeforeUnload = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [editor.dirty]);
+
+  // 封存
+  const confirmArchive = async () => {
+    if (!archiveTarget) return;
+    try {
+      await archiveProjectInCloud(archiveTarget);
+      setProjects((v) => v.filter((p) => p.id !== archiveTarget));
+    } catch (e) {
+      console.error('封存失敗', e);
+    } finally {
+      setArchiveTarget(null);
+    }
+  };
+
+  if (!isNew && !projects.length) {
     return <div className="empty"><i className="ti ti-folder-plus"></i>還沒有專案，按右上「新增專案」開始</div>;
+  }
+  // id 對不到→ 補選第一個。
+  if (!isNew && !projects.some((p) => p.id === id)) {
+    return <Navigate to={`/project/${projects[0].id}`} replace />;
   }
 
   return (
@@ -17,29 +104,58 @@ export function ProjectPage({ projects, sel, setSel, onUpdate, miles, onAdd, onD
         {projects.map((pp) => {
           const tone = getTone(pp);
           return (
-            <button key={pp.id} onClick={() => setSel(pp.id)}
-                    className={`proj-tab ${sel === pp.id ? "active" : ""}`}>
+            <button key={pp.id} onClick={() => navigate(`/project/${pp.id}`)}
+                    className={`proj-tab ${id === pp.id ? "active" : ""}`}>
               <span className="dot" style={{ background: tone.bg }}></span>
               {pp.name}
-              <span className="badge">{pp.mode === "forward" ? "正推" : "反推"}</span>
             </button>
           );
         })}
-        <button className="proj-tab" onClick={onAdd}>
+        <button className={`proj-tab ${isNew ? "active" : ""}`} onClick={() => navigate('/project/new')}>
           <i className="ti ti-plus" style={{ fontSize: 14 }}></i> 新增
         </button>
       </div>
 
-      {p
-        ? <ProjectDetail p={p} onUpdate={onUpdate} miles={miles[sel]} onDelete={() => onDelete(p.id)} />
+      {editor.draft
+        ? <ProjectDetail p={editor.draft} onUpdate={editor.updateDraft} miles={miles[id]}
+                         dirty={editor.dirty} onSave={isNew ? handleNewSave : editor.save}
+                         onArchive={isNew ? undefined : () => setArchiveTarget(id)}
+                         onCancel={isNew ? handleCancel : undefined} />
         : <div className="empty">選擇專案</div>}
+
+      <ConfirmModal
+        open={!!archiveTarget}
+        title="封存專案"
+        message={`確定要封存「${(projects.find((p) => p.id === archiveTarget) || {}).name || ""}」嗎？封存後會移到封存檔案，可日後查看。`}
+        confirmLabel="封存"
+        onConfirm={confirmArchive}
+        onCancel={() => setArchiveTarget(null)}
+      />
+
+      <UnsavedChangesModal
+        open={blocker.state === 'blocked'}
+        onDiscard={() => { editor.discard(); blocker.proceed(); }}
+        onSave={async () => { await editor.save(); blocker.proceed(); }}
+        onClose={() => blocker.reset?.()}
+      />
     </div>
   );
 }
 
-function ProjectDetail({ p, onUpdate, miles, onDelete }) {
+function ProjectDetail({ p, onUpdate, miles, dirty, onSave, onArchive, onCancel }) {
   const [exp, setExp] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [saveErr, setSaveErr] = useState("");
   const tone = getTone(p);
+
+  // 儲存
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveErr("");
+    try { await onSave(); }
+    catch (e) { setSaveErr(e?.message || "儲存失敗，請稍後再試"); }
+    finally { setSaving(false); }
+  };
 
   const gr = {};
   (p.tasks || []).forEach((t) => {
@@ -65,14 +181,14 @@ function ProjectDetail({ p, onUpdate, miles, onDelete }) {
   return (
     <div>
       <div className="card" style={{ marginBottom: 18 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-          <div style={{ width: 12, height: 12, borderRadius: 50, background: tone.bg, border: `2px solid ${tone.ink}` }} />
+        <div className={styles.header}>
+          <div className={styles.dot} style={{ background: tone.bg, borderColor: tone.ink }} />
           <input
+            className={styles.name}
             value={p.name}
             onChange={(e) => onUpdate({ ...p, name: e.target.value })}
-            style={{ fontSize: 22, fontWeight: 500, border: "none", background: "transparent", outline: "none", flex: 1, color: "var(--ink)", fontFamily: "var(--font-sans)", letterSpacing: "-0.01em" }}
           />
-          <div className="tpl-toggle" style={{ marginBottom: 0 }}>
+          <div className={`tpl-toggle ${styles.toggle}`}>
             <button onClick={() => onUpdate({ ...p, template: "full", tasks: mkTasks("full") })}
                     className={p.template === "full" ? "active" : ""}>全自操</button>
             <button onClick={() => {
@@ -80,35 +196,34 @@ function ProjectDetail({ p, onUpdate, miles, onDelete }) {
               onUpdate({ ...p, template: "pm", tasks: ts });
             }} className={p.template === "pm" ? "active" : ""}>PM 模式</button>
           </div>
-          <button className="iconbtn-x" onClick={onDelete} title="刪除專案">
-            <i className="ti ti-trash"></i>
-          </button>
+          {dirty && (
+            <button className={styles.saveBtn} onClick={handleSave} disabled={saving} title="儲存變更到雲端">
+              <i className="ti ti-device-floppy"></i>{saving ? "儲存中…" : "儲存"}
+            </button>
+          )}
+          {onCancel && (
+            <button className="iconbtn-x" onClick={onCancel} title="取消，捨棄這個新草稿">
+              <i className="ti ti-x"></i>
+            </button>
+          )}
+          {onArchive && (
+            <button className="iconbtn-x" onClick={onArchive} title="封存專案">
+              <i className="ti ti-archive"></i>
+            </button>
+          )}
         </div>
+        {saveErr && <div className={styles.saveErr}>{saveErr}</div>}
 
         <textarea className="text-in" rows={2}
                   placeholder="專案備註…例如：「電檢通過，可立刻啟動」"
                   value={p.notes || ""} onChange={(e) => onUpdate({ ...p, notes: e.target.value })} />
 
         <div style={{ height: 18 }} />
-        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>排程模式</div>
-        <div className="mode-card">
-          {[
-            { k: "forward",  l: "A · 正推", d: "啟動日 → 推算上線" },
-            { k: "backward", l: "B · 反推", d: "上線日 → 反推啟動" },
-          ].map((x) => (
-            <button key={x.k} onClick={() => onUpdate({ ...p, mode: x.k })}
-                    className={`mode-opt ${p.mode === x.k ? "active" : ""}`}>
-              <div className="lbl">{x.l}</div>
-              <div className="desc">{x.d}</div>
-            </button>
-          ))}
-        </div>
-
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
           <div className="date-cell tone-lavender">
             <div className="lbl">專案啟動日</div>
             <DateInput value={p.startDate || ""} onChange={(e) => u("startDate")(e.target.value)} />
-            {p.mode === "backward" && !p.startDate && miles?.calcStart && (
+            {!p.startDate && miles?.calcStart && (
               <div className="hint" style={{ color: "var(--t-lavender-ink)" }}>建議 {fmt(miles.calcStart)} 起</div>
             )}
           </div>
