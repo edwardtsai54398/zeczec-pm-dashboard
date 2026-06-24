@@ -1,8 +1,7 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient.js';
 import { DEFAULT_PREFERENCES, DEFAULT_WORKSPACE_SETTINGS } from '../constants.js';
 import { writePreference } from '../lib/preference.js';
-import { debounce } from '../lib/debounce.js';
 
 // onboarding 完成時，幫使用者建立自己的 workspace 與 owner 身分。
 async function ensureOwnerWorkspace(userId, workspaceName) {
@@ -107,35 +106,22 @@ export function useProfile(user) {
     setProfile(data);           // 更新狀態 → 門禁自動切到 AppContent
   }, [user]);
 
-  const writePreferenceToDb = useMemo(
-    () =>
-      debounce(async (userId, prefs) => {
-        // 寫 DB 失敗只記錄不 rollback
-        const { error } = await supabase
-          .from('profiles')
-          .update({ preferences: prefs })
-          .eq('id', userId);
-        if (error) console.error('更新偏好失敗', error);
-      }),
-    []
-  );
-
-  // 元件卸載前把還沒送出的最後一次寫入補送,避免丟失
-  useEffect(() => () => writePreferenceToDb.flush(), [writePreferenceToDb]);
-
-  // 先本地 UI 同步、DB 寫入交給 debounce,使用者體驗即時且不狂打 DB
-  const updatePreference = useCallback((patch) => {
+  // 先寫 DB,成功才同步 localStorage 快取與畫面狀態。
+  const savePreferences = useCallback(async (prefs) => {
     if (!user) return;
-    const next = { ...DEFAULT_PREFERENCES, ...profile?.preferences, ...patch };
+    const next = { ...DEFAULT_PREFERENCES, ...prefs };
 
-    // 本地立即生效:localStorage + 畫面狀態
+    const { error } = await supabase
+      .from('profiles')
+      .update({ preferences: next })
+      .eq('id', user.id);
+    if (error) throw error;
+
     writePreference(next);
     setProfile((p) => (p ? { ...p, preferences: next } : p));
-
-    writePreferenceToDb(user.id, next);
-  }, [user, profile?.preferences, writePreferenceToDb]);
+  }, [user]);
 
   const preferences = { ...DEFAULT_PREFERENCES, ...profile?.preferences };
 
-  return { profile, status, saveProfile, preferences, updatePreference };
+  return { profile, status, saveProfile, preferences, savePreferences };
 }

@@ -7,14 +7,14 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const { session, loading } = useAuth();
-  const { profile, status: profileStatus, saveProfile, preferences, updatePreference } = useProfile(session?.user);
+  const { profile, status: profileStatus, saveProfile, preferences, savePreferences } = useProfile(session?.user);
 
   // Topbar 工作區
   const workspaces = useOwnerWorkspace(session?.user?.id);
   const workspaceId = workspaces[0]?.id ?? null;
 
   const value = {
-    session, loading, profile, profileStatus, saveProfile, preferences, updatePreference,
+    session, loading, profile, profileStatus, saveProfile, preferences, savePreferences,
     workspaces, workspaceId,
   };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

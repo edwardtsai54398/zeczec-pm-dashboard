@@ -3,7 +3,7 @@ import { useWorkspace } from '../../context/WorkspaceContext.jsx';
 import { Dashboard } from './Dashboard.jsx';
 import { Gantt } from './Gantt.jsx';
 import { KOLPage } from './KOLPage.jsx';
-import { SettingsPage } from './SettingsPage.jsx';
+import { SettingsPage } from './SettingsPage/index.jsx';
 
 // 各頁的 route 接點
 
@@ -24,6 +24,6 @@ export function KOLRoute() {
 }
 
 export function SettingsRoute() {
-  const { settings, setSettings } = useWorkspace();
-  return <SettingsPage settings={settings} onUpdate={setSettings} />;
+  // SettingsPage 自行從 context 取設定/偏好與雲端儲存(比照 ProjectPage)。
+  return <SettingsPage />;
 }

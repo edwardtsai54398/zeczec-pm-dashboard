@@ -3,6 +3,7 @@ import { runScheduleV2 } from '../lib/schedulerV2.js';
 import { D_PROJECTS, D_SETTINGS } from '../constants.js';
 import { usePersistence } from '../hooks/usePersistence.js';
 import { useCloudProjects } from '../hooks/useCloudProjects.js';
+import { useCloudWorkspaceSettings } from '../hooks/useCloudWorkspaceSettings.js';
 import { useAuthContext } from './AuthContext.jsx';
 
 const WorkspaceContext = createContext(null);
@@ -17,6 +18,9 @@ export function WorkspaceProvider({ children }) {
   // 雲端資料層:載入覆蓋全域 projects,並提供存/新增/封存。
   const { saveProjectToCloud, insertProjectToCloud, archiveProjectInCloud } =
     useCloudProjects(workspaceId, setProjects);
+
+  // 雲端資料層:載入覆蓋全域 settings(工時/不可用時段),並提供整包儲存。
+  const { saveSettingsToCloud } = useCloudWorkspaceSettings(workspaceId, setSettings);
 
   const { sch, miles } = useMemo(() => {
     try { return runScheduleV2(projects, settings); }
@@ -49,6 +53,7 @@ export function WorkspaceProvider({ children }) {
     projects, setProjects, settings, setSettings, loaded,
     sch, miles,
     saveProjectToCloud, insertProjectToCloud, archiveProjectInCloud,
+    saveSettingsToCloud,
     updateProject, updateTaskPin,
   };
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
