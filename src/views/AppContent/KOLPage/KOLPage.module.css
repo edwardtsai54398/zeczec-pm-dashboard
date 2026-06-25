@@ -1,0 +1,45 @@
+/* KOLPage:KOL 合作清單頁。scope 了卡片標題右側的動作群組,
+   以及「有未存草稿時」才出現的儲存/還原按鈕。專案 tab、kol-card、表單沿用全域樣式。 */
+
+/* 卡片標題右側:儲存/還原 + 新增 KOL 並排 */
+.titleActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 一次性錯誤紅,允許寫死 */
+.saveErr {
+  color: #b4453c;
+  font-size: 12px;
+}
+
+.saveBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border: none;
+  border-radius: 999px;
+  background: var(--t-sky);
+  color: var(--t-sky-ink);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: opacity .12s;
+}
+.saveBtn:hover { opacity: .9; }
+.saveBtn:disabled { opacity: .55; cursor: default; }
+
+.discardBtn {
+  border: none;
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  padding: 7px 8px;
+}
+.discardBtn:hover { color: var(--ink); }
+.discardBtn:disabled { opacity: .55; cursor: default; }

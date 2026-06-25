@@ -27,10 +27,6 @@ export function WorkspaceProvider({ children }) {
     catch (e) { console.error('schedule error', e); return { sch: {}, miles: {} }; }
   }, [projects, settings]);
 
-  // KOL 頁就地改單一專案(本地快取,沿用既有行為,不寫雲)。
-  const updateProject = useCallback((updated) =>
-    setProjects((v) => v.map((p) => (p.id === updated.id ? updated : p))), [setProjects]);
-
   // 甘特圖釘選同樣只改本地 projects。
   const updateTaskPin = useCallback((pid, taskId, { pinnedStart, pinnedHours, pinnedWait }) => {
     setProjects((v) => v.map((p) => {
@@ -54,7 +50,7 @@ export function WorkspaceProvider({ children }) {
     sch, miles,
     saveProjectToCloud, insertProjectToCloud, archiveProjectInCloud,
     saveSettingsToCloud,
-    updateProject, updateTaskPin,
+    updateTaskPin,
   };
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }
