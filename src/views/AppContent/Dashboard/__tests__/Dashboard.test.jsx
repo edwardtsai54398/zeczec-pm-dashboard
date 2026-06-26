@@ -1,6 +1,55 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
-import { Dashboard } from '../Dashboard.jsx';
+
+// Dashboard 自己從 context / hook 取資料(projects/排程/里程碑 + 完成狀態),
+// 測試把這些來源換成可控假實作:
+// - WorkspaceContext 由每次 renderDashboard 注入該情境的 projects / 排程 / 里程碑。
+// - AuthContext 給固定的 workspaceId / userId。
+// - 完成狀態用一個「跨重新掛載存活」的 store 模擬雲端持久化(打勾後重整仍在),
+//   讓跨卡片繼承等行為仍可驗證。雲端載入/debounce/剪枝在 useCloudWorkspaceState 自己的測試驗。
+// - useNavigate 換成 noop:里程碑卡片「開啟甘特圖」只需可點,測試不實際導頁。
+const mockStore = vi.hoisted(() => ({ todoDone: {}, overdueDone: {} }));
+const mockWorkspace = vi.hoisted(() => ({ projects: [], sch: {}, miles: {} }));
+
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => () => {},
+}));
+
+vi.mock('../../../../context/WorkspaceContext.jsx', () => ({
+  useWorkspace: () => mockWorkspace,
+}));
+
+vi.mock('../../../../context/AuthContext.jsx', () => ({
+  useAuthContext: () => ({ workspaceId: 'w-test', session: { user: { id: 'u-test' } } }),
+}));
+
+vi.mock('../../../../hooks/useCloudWorkspaceState.js', async () => {
+  const { useReducer, useCallback } = await import('react');
+  return {
+    useCloudWorkspaceState: () => {
+      const [, force] = useReducer((n) => n + 1, 0);
+      const toggleTodoDone = useCallback((k, until) => {
+        const next = { ...mockStore.todoDone };
+        if (next[k]) delete next[k]; else next[k] = until;
+        mockStore.todoDone = next;
+        force();
+      }, []);
+      const dismissOverdue = useCallback((k) => {
+        if (mockStore.overdueDone[k]) return;
+        mockStore.overdueDone = { ...mockStore.overdueDone, [k]: true };
+        force();
+      }, []);
+      return {
+        todoDone: mockStore.todoDone,
+        overdueDone: mockStore.overdueDone,
+        toggleTodoDone,
+        dismissOverdue,
+      };
+    },
+  };
+});
+
+import { Dashboard } from '../index.jsx';
 
 // Fixed today: 2024-01-15 (Monday)
 const TODAY = new Date('2024-01-15T10:00:00');
@@ -20,14 +69,11 @@ function makeTask(id, name, start, end, hours = 4) {
 }
 
 function renderDashboard(projects, data) {
-  return render(
-    <Dashboard
-      projects={projects}
-      data={data}
-      miles={{}}
-      onJump={() => {}}
-    />,
-  );
+  // 透過假的 WorkspaceContext 注入該情境資料,再 render 不帶 props 的 Dashboard。
+  mockWorkspace.projects = projects;
+  mockWorkspace.sch = data;
+  mockWorkspace.miles = {};
+  return render(<Dashboard />);
 }
 
 function getCard(title) {
@@ -38,12 +84,14 @@ describe('Dashboard', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(TODAY);
-    localStorage.clear();
+    mockStore.todoDone = {};
+    mockStore.overdueDone = {};
   });
 
   afterEach(() => {
     vi.useRealTimers();
-    localStorage.clear();
+    mockStore.todoDone = {};
+    mockStore.overdueDone = {};
   });
 
   // ── 需求一：近七日活動只顯示今天之後、七日內的任務 ──────────────────────────

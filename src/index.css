@@ -309,20 +309,6 @@ button { cursor: pointer; }
   position: relative;
   overflow: hidden;
 }
-.card.overdue-card {
-  background: rgba(239, 68, 68, 0.06);
-  border: 1px solid rgba(239, 68, 68, 0.15);
-}
-.overdue-badge {
-  font-size: 12px;
-  font-weight: 600;
-  background: rgba(239, 68, 68, 0.12);
-  color: #dc2626;
-  border-radius: 10px;
-  padding: 2px 8px;
-  min-width: 20px;
-  text-align: center;
-}
 .card-soft {
   background: var(--surface-soft);
   border-radius: var(--r-lg);
@@ -353,28 +339,6 @@ button { cursor: pointer; }
   font-size: 15px;
 }
 .card-icon-btn:hover { background: var(--bg-warm); color: var(--ink); }
-
-/* ╭─ milestones card (left) ──────────────────────╮ */
-.ms-card { display: flex; flex-direction: column; height: 100%; min-height: 380px; }
-.ms-bubble-stack { display: flex; flex-direction: column; gap: 12px; flex: 1; }
-.ms-bubble {
-  background: var(--surface-tint);
-  border-radius: var(--r);
-  padding: 14px 16px;
-  display: flex; flex-direction: column; gap: 6px;
-}
-.ms-bubble-head {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 14px; font-weight: 600;
-  color: var(--ink);
-}
-.ms-bubble-head .dot {
-  width: 9px; height: 9px; border-radius: 50%;
-}
-.ms-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
-.ms-row .lbl { color: var(--ink-2); }
-.ms-row .val { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
-.ms-row .val.pend { color: var(--ink-3); font-weight: 400; }
 
 /* ╭─ timeline card (right) ──────────────────────╮ */
 .tl-card { min-height: 380px; display: flex; flex-direction: column; }
@@ -460,6 +424,7 @@ button { cursor: pointer; }
   border-color: var(--accent-deep);
   color: white;
 }
+.todo-check i { font-size: 12px; }
 .todo-text { flex: 1; min-width: 0; }
 .todo-name {
   font-size: 13px; font-weight: 500;
@@ -468,18 +433,6 @@ button { cursor: pointer; }
 }
 .todo-name.done { text-decoration: line-through; color: var(--ink-3); }
 .todo-meta { font-size: 11px; color: var(--ink-3); margin-top: 2px; }
-.todo-days-left {
-  font-size: 11px; font-weight: 500;
-  color: var(--ink-3);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.todo-days-left.urgent {
-  color: #D94F38;
-  background: #FDECEA;
-  padding: 2px 7px;
-  border-radius: 999px;
-}
 .todo-tag {
   font-size: 10px; padding: 3px 9px;
   border-radius: 999px;
@@ -493,20 +446,6 @@ button { cursor: pointer; }
   font-size: 13px;
   background: var(--surface-tint);
   border-radius: var(--r);
-}
-.todo-show-more {
-  text-align: center;
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--ink-3);
-  cursor: pointer;
-  padding: 6px;
-  border-radius: var(--r);
-  transition: background 0.15s, color 0.15s;
-}
-.todo-show-more:hover {
-  background: var(--surface-tint);
-  color: var(--ink-1);
 }
 
 /* ╭─ chart ──────────────────────────────────────╮ */

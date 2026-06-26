@@ -28,6 +28,31 @@ ComponentName/
   ```
 - 同一個功能群組的相關小元件可共用一個資料夾(例:`SettingsIO/` 放 AvatarMenu + settingsIO.js)。
 
+## 一個 `.jsx` 只放一個 React 元件
+
+一個 `.jsx` 檔只匯出**一個** React 元件,不要把多個元件塞進同一支檔案。
+拆出來的子元件各自獨立成檔(需要自己樣式就照上面的同名資料夾結構)。
+
+❌ 不要這樣(一個檔案塞多個元件):
+```jsx
+// Dashboard.jsx
+export function Dashboard() { ... }
+function MilestonesCard() { ... }
+function TodoCard() { ... }
+```
+
+✅ 每個元件一支檔(同名資料夾 + `index.jsx`):
+```
+Dashboard/
+├─ index.jsx                 ← Dashboard 本體
+├─ utils.js                  ← 純工具函式(非元件),不受這條限制
+├─ MilestonesCard/index.jsx
+└─ TodoCard/index.jsx
+```
+
+跟元件相關的**純資料/工具函式**(非 React 元件)可以集中放在同層的 `utils.js`,
+不算「多個元件」。
+
 ## 不要寫 inline style 物件
 
 ❌ 不要這樣（把靜態樣式寫成 JS 物件）:
@@ -62,6 +87,75 @@ const wrap = { minHeight: '100vh', display: 'flex', ... };
 ```jsx
 <button className={`avatar ${styles.trigger}`}>
 ```
+
+## 變數命名不要用簡寫
+
+變數一律用完整、看得懂的名字,不要縮成單一字母或殘缺簡寫。
+
+❌ 不要這樣:
+```jsx
+const s = new Date(t.start), e = new Date(t.end);
+projects.forEach((p) => { p });
+```
+
+✅ 改成完整命名:
+```jsx
+const startDate = new Date(task.start), endDate = new Date(task.end);
+projects.forEach((project) => {});
+```
+
+例外:**第二層巢狀迴圈**的變數若會和外層完整名稱衝突,才退而用簡寫。
+
+## 資料在「用到的那層」呼叫,不要從最上層一路 props 傳下來
+
+資料(context、雲端 hook)在**真正用到它的那層元件**自己呼叫,不要在最上層先全部叫出來、
+再用 props 一路串到深層才使用。呼叫點離使用點越遠,中間每一層都被迫掛上不相干的 props,
+改一個欄位要動一串檔案,而且中間層也被綁死、不好單獨重用。
+
+判斷原則:**誰在用這份資料,就在誰那層讀**。共享資料已放在 `WorkspaceContext` /
+`AuthContext`,任何層級直接讀 context 都「不算」往下傳——要避免的是「在上層讀出來、再用 props
+傳下去」這條長鏈。
+
+✅ 這樣可以(現有最佳實踐):route 接點只負責 render,頁面自己取資料:
+```jsx
+// views/AppContent/routes.jsx
+export function KOLRoute() {
+  return <KOLPage />;               // route 不讀資料
+}
+
+// views/AppContent/KOLPage/index.jsx —— 真正用到 projects 的那層,自己取
+export function KOLPage() {
+  const { projects, setProjects, saveProjectToCloud } = useWorkspace();
+  // ...
+}
+```
+
+✅ Dashboard 的完成狀態也一樣:`useCloudWorkspaceState` 在 `Dashboard` 自己呼叫,
+不從 route 傳進來:
+```jsx
+// views/AppContent/Dashboard/index.jsx
+export function Dashboard({ projects, data, miles, onJump }) {
+  const { workspaceId, session } = useAuthContext();
+  const { todoDone, toggleTodoDone, dismissOverdue } =
+    useCloudWorkspaceState(workspaceId, session?.user?.id);
+  // ...
+}
+```
+
+❌ 不要這樣(把資料 hoist 到 route / 上層,再一路 props 傳下去):
+```jsx
+// routes.jsx —— 不要在這裡叫完成狀態,再塞給 Dashboard
+export function DashboardRoute() {
+  const { todoDone, toggleTodoDone, dismissOverdue } =
+    useCloudWorkspaceState(workspaceId, userId);
+  // Dashboard 收下後,還得把這些原封不動再往 TodoCard / TimelineCard 傳一層,鏈越拉越長
+  return <Dashboard todoDone={todoDone} onToggle={toggleTodoDone} onDismiss={dismissOverdue} />;
+}
+```
+
+界線:傳給**緊鄰的呈現用子元件**是 OK 的(例:`Dashboard` 把 `done` / `onToggle`
+傳給葉子卡片 `TodoCard`、`TimelineCard`)。要避免的是「跨越不相干的中間層,把資料的呼叫點
+推到離使用點很遠的地方」。
 
 ## 其他慣例
 

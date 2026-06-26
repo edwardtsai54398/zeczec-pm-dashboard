@@ -1,0 +1,24 @@
+/* MilestonesCard:里程碑卡片的泡泡列表與問卷/募資日期排版。
+   卡片外框、標題、空狀態沿用全域 .card/.card-title/.empty,這裡只放里程碑專屬樣式。 */
+.msCard { display: flex; flex-direction: column; height: 100%; min-height: 380px; }
+.msBubbleStack { display: flex; flex-direction: column; gap: 12px; flex: 1; }
+.msBubble {
+  background: var(--surface-tint);
+  border-radius: var(--r);
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.msBubbleHead {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 600;
+  color: var(--ink);
+}
+.msBubbleHead .dot {
+  width: 9px; height: 9px; border-radius: 50%;
+}
+/* 專案名稱撐滿剩餘空間,把色點固定在最左 */
+.name { flex: 1; }
+.msRow { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+.msRow .lbl { color: var(--ink-2); }
+.msRow .val { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.msRow .val.pend { color: var(--ink-3); font-weight: 400; }

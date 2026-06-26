@@ -1,0 +1,30 @@
+/* OverdueCard:過期未完成卡片的紅底外觀、數量徽章,以及「還有 N 項/收起」展開連結。
+   清單列、卡片外框沿用全域 .card/.todo-*,這裡只放過期卡片獨有的樣式。 */
+.overdueCard {
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+}
+.overdueBadge {
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+  border-radius: 10px;
+  padding: 2px 8px;
+  min-width: 20px;
+  text-align: center;
+}
+.showMore {
+  text-align: center;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ink-3);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--r);
+  transition: background 0.15s, color 0.15s;
+}
+.showMore:hover {
+  background: var(--surface-tint);
+  color: var(--ink);
+}

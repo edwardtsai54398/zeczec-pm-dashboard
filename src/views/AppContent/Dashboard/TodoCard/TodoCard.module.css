@@ -1,0 +1,14 @@
+/* TodoCard:今日待辦專屬的「剩餘天數」標籤(三天內以 urgent 紅底警示)。
+   清單列、卡片外框沿用全域 .todo-* 與 .card,這裡只放今日待辦獨有的樣式。 */
+.daysLeft {
+  font-size: 11px; font-weight: 500;
+  color: var(--ink-3);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.daysLeft.urgent {
+  color: #D94F38;
+  background: #FDECEA;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
