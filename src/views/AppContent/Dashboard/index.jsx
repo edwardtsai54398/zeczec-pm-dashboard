@@ -10,6 +10,7 @@ import { MilestonesCard } from './MilestonesCard/index.jsx';
 import { TimelineCard } from './TimelineCard/index.jsx';
 import { TodoCard } from './TodoCard/index.jsx';
 import { OverdueCard } from './OverdueCard/index.jsx';
+import styles from './Dashboard.module.css';
 
 export function Dashboard() {
   const { projects, sch: data, miles } = useWorkspace();
@@ -95,29 +96,29 @@ export function Dashboard() {
 
   return (
     <div>
-      <section className="hero">
-        <div className="hero-left">
-          <h1 className="greeting">
+      <section className={styles.hero}>
+        <div className={styles.heroLeft}>
+          <h1 className={styles.greeting}>
             {greetingFor(hour)}<em>,</em> <em>讓今天順利推進。</em>
           </h1>
-          <p className="greeting-sub">
+          <p className={styles.greetingSub}>
             今天是 {today.getMonth() + 1}/{today.getDate()} 週{WEEK[today.getDay()]} · {todayTasks.length} 項任務進行中 · 接下來 7 天還有 {soonTasks.length} 項
           </p>
         </div>
         <RandomCat />
-        <div className="hero-right">
-          <div className="stat">
-            <div className="stat-label">進行中專案</div>
-            <div className="stat-value">{activeProjects}<i className="ti ti-arrow-up-right"></i></div>
+        <div className={styles.heroRight}>
+          <div className={styles.stat}>
+            <div className={styles.statLabel}>進行中專案</div>
+            <div className={styles.statValue}>{activeProjects}<i className="ti ti-arrow-up-right"></i></div>
           </div>
-          <div className="stat">
-            <div className="stat-label">本週工時</div>
-            <div className="stat-value">{Math.round(weekHours)}<span className="unit">hr</span><i className="ti ti-arrow-up-right"></i></div>
+          <div className={styles.stat}>
+            <div className={styles.statLabel}>本週工時</div>
+            <div className={styles.statValue}>{Math.round(weekHours)}<span className={styles.unit}>hr</span><i className="ti ti-arrow-up-right"></i></div>
           </div>
         </div>
       </section>
 
-      <div className="dash-cards">
+      <div className={styles.dashCards}>
         <TodoCard tasks={todayTasks} today={today} done={todoDone} onToggle={toggleTodoDone} />
         {overdueTasks.length > 0 && (
           <OverdueCard tasks={overdueTasks} today={today} dismissed={overdueDone} onDismiss={dismissOverdue} />

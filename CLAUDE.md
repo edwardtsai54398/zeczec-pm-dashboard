@@ -88,6 +88,36 @@ const wrap = { minHeight: '100vh', display: 'flex', ... };
 <button className={`avatar ${styles.trigger}`}>
 ```
 
+## 元件專屬的 selector 不要遺留在 index.css
+
+`src/index.css` 只放**全域工具 class**(`.app` `.main` `.avatar` `.card` `.card-title`
+`.modal-overlay`…—被多個元件共用的)。**只有單一元件用到**的 selector 不該留在這裡,要拉到
+該元件的 `ComponentName.module.css`,改用 `className={styles.xxx}`。
+
+寫(或改)一個元件時,順手檢查 `index.css` 裡有沒有「**只有這個元件**會用到」的 selector
+還沒搬:
+
+```bash
+# 例:確認 .hero / .greeting 只有 Dashboard 在用 → 該搬進 Dashboard.module.css
+grep -rn "className=\"hero\"" src   # 只命中一個元件 = 元件專屬,搬走
+```
+
+判斷原則:**這個 class 還有沒有別人用?** 只有一個元件用 → 搬進該元件的 module；
+兩個以上元件共用 → 留在 `index.css` 當全域工具 class。共用的判斷以「有沒有別的元件掛這個
+class」為準,不是看名字像不像通用。
+
+搬移時的接縫(module 內引用全域 class)用 `:global()`:
+
+```css
+/* Dashboard.module.css —— 卡片外觀沿用全域 .card,只在這裡排版 */
+.dashCards > :global(.card) { flex: 1 1 calc(50% - 9px); }
+:global(body.density-compact) .hero { padding: 10px 4px 18px; }
+```
+
+別漏了**被一起連動的選擇器**:`body.density-compact .hero`、`.hero .random-cat` 這種
+帶著元件專屬 class 的規則,也要一起搬;只搬 `.hero` 本體、把 compact 覆寫留在 index.css,
+會變成「改一個欄位要動兩個檔」的裂縫。
+
 ## 變數命名不要用簡寫
 
 變數一律用完整、看得懂的名字,不要縮成單一字母或殘缺簡寫。
