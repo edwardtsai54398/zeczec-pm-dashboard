@@ -1,7 +1,30 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { Gantt } from '../Gantt.jsx';
-import { addD } from '../../../lib/dateUtils.js';
+import { addD } from '../../../../lib/dateUtils.js';
+import styles from '../Gantt.module.css';
+
+// Gantt 自己從 context 取 projects/排程/設定/釘選儲存(比照 Dashboard 測試),
+// 測試把 WorkspaceContext 換成可控假實作,每次 renderGantt 注入該情境的資料。
+const mockWorkspace = vi.hoisted(() => ({ projects: [], sch: {}, settings: {}, updateTaskPin: () => {} }));
+
+vi.mock('../../../../context/WorkspaceContext.jsx', () => ({
+  useWorkspace: () => mockWorkspace,
+}));
+
+import { Gantt } from '../index.jsx';
+
+// CSS Module 的 class 在測試會被 hash,故用 styles 物件組出實際選擇器。
+// dot('bar','lime') => '.<barHash>.<limeHash>'
+const dot = (...keys) => '.' + keys.map((key) => styles[key]).join('.');
+
+// 設定 mock workspace 後渲染 Gantt(Gantt 不再吃 props,改吃 context)。
+function renderGantt({ projects = [], data = {}, settings = {}, updateTaskPin = () => {} } = {}) {
+  mockWorkspace.projects = projects;
+  mockWorkspace.sch = data;
+  mockWorkspace.settings = settings;
+  mockWorkspace.updateTaskPin = updateTaskPin;
+  return render(<Gantt />);
+}
 
 // --- Helpers ---
 
@@ -138,14 +161,14 @@ describe('左上角年份月份顯示 (dateLabel)', () => {
   const data = { P1: { T1: makeTask('T1', '任務A', '2026-05-11', '2026-05-15') } };
 
   it('初始顯示當前 viewStart 的年月', () => {
-    render(<Gantt projects={projects} data={data} />);
+    renderGantt({ projects, data });
     const today = new Date();
     const expected = `${today.getFullYear()} 年 ${today.getMonth() + 1} 月`;
     expect(screen.getByText(expected)).toBeInTheDocument();
   });
 
   it('左箭頭退一週後，dateLabel 更新為新可視日期的年月', () => {
-    render(<Gantt projects={projects} data={data} />);
+    renderGantt({ projects, data });
     const prevBtn = screen.getAllByRole('button').find(
       btn => btn.querySelector('.ti-chevron-left')
     );
@@ -159,7 +182,7 @@ describe('左上角年份月份顯示 (dateLabel)', () => {
   it('跨月時 dateLabel 切換到新月份（例：5月→4月）', () => {
     // This is tested indirectly — when viewStart is at month boundary
     // and we scroll back, the label updates
-    render(<Gantt projects={projects} data={data} />);
+    renderGantt({ projects, data });
     const label = screen.getByText(/年.*月/);
     expect(label.textContent).toMatch(/^\d{4} 年 \d{1,2} 月$/);
   });
@@ -168,7 +191,7 @@ describe('左上角年份月份顯示 (dateLabel)', () => {
     // Uses a project with Jan dates to force viewStart near year boundary
     const janProjects = [makeProject('P1', '跨年專案')];
     const janData = { P1: { T1: makeTask('T1', '任務', '2025-12-29', '2026-01-05') } };
-    render(<Gantt projects={janProjects} data={janData} />);
+    renderGantt({ projects: janProjects, data: janData });
     // The component starts at today, so this is a structural test
     const label = screen.getByText(/年.*月/);
     expect(label).toBeInTheDocument();
@@ -184,8 +207,8 @@ describe('左右箭頭導航邏輯', () => {
   const data = { P1: { T1: makeTask('T1', '任務1', '2026-05-11', '2026-06-15') } };
 
   it('點擊右箭頭 (nextWeek) 滾動到下一個週一', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const scrollEl = container.querySelector('.g2-scroll');
+    const { container } = renderGantt({ projects, data });
+    const scrollEl = container.querySelector(dot('scroll'));
     // Mock scrollTo
     scrollEl.scrollTo = vi.fn();
 
@@ -199,8 +222,8 @@ describe('左右箭頭導航邏輯', () => {
   });
 
   it('點擊左箭頭 (prevWeek) 在 scrollLeft > 0 時滾動到上一個週一', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const scrollEl = container.querySelector('.g2-scroll');
+    const { container } = renderGantt({ projects, data });
+    const scrollEl = container.querySelector(dot('scroll'));
     Object.defineProperty(scrollEl, 'scrollLeft', { value: 200, writable: true });
     scrollEl.scrollTo = vi.fn();
 
@@ -214,8 +237,8 @@ describe('左右箭頭導航邏輯', () => {
   });
 
   it('點擊左箭頭在 scrollLeft=0 時，viewStart 後退一週', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const scrollEl = container.querySelector('.g2-scroll');
+    const { container } = renderGantt({ projects, data });
+    const scrollEl = container.querySelector(dot('scroll'));
     Object.defineProperty(scrollEl, 'scrollLeft', { value: 0, writable: true });
     scrollEl.scrollTo = vi.fn();
 
@@ -229,8 +252,8 @@ describe('左右箭頭導航邏輯', () => {
   });
 
   it('「回到今天」按鈕將 viewStart 重設為今天', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const scrollEl = container.querySelector('.g2-scroll');
+    const { container } = renderGantt({ projects, data });
+    const scrollEl = container.querySelector(dot('scroll'));
     scrollEl.scrollTo = vi.fn();
 
     const todayBtn = screen.getByText('回到今天');
@@ -250,40 +273,40 @@ describe('日期格 header 渲染', () => {
   const data = { P1: { T1: makeTask('T1', '任務', '2026-05-11', '2026-05-20') } };
 
   it('每個日期格顯示日期數字和星期縮寫', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const dayCells = container.querySelectorAll('.g2-date-cell');
+    const { container } = renderGantt({ projects, data });
+    const dayCells = container.querySelectorAll(dot('dateCell'));
     expect(dayCells.length).toBeGreaterThan(0);
 
     const firstCell = dayCells[0];
-    expect(firstCell.querySelector('.g2-day-num')).toBeTruthy();
-    expect(firstCell.querySelector('.g2-day-name')).toBeTruthy();
+    expect(firstCell.querySelector(dot('dayNum'))).toBeTruthy();
+    expect(firstCell.querySelector(dot('dayName'))).toBeTruthy();
   });
 
   it('週末日期格有 weekend class', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const weekendCells = container.querySelectorAll('.g2-date-cell.weekend');
+    const { container } = renderGantt({ projects, data });
+    const weekendCells = container.querySelectorAll(dot('dateCell', 'weekend'));
     expect(weekendCells.length).toBeGreaterThan(0);
   });
 
   it('今天的日期格有 today class 和「今天」bubble', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const todayCell = container.querySelector('.g2-date-cell.today');
+    const { container } = renderGantt({ projects, data });
+    const todayCell = container.querySelector(dot('dateCell', 'today'));
     if (todayCell) {
-      expect(todayCell.querySelector('.g2-today-bubble').textContent).toBe('今天');
+      expect(todayCell.querySelector(dot('todayBubble')).textContent).toBe('今天');
     }
   });
 
   it('月份標籤 (monthLabels) 在月份切換處渲染', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const monthBands = container.querySelectorAll('.g2-month-band');
+    const { container } = renderGantt({ projects, data });
+    const monthBands = container.querySelectorAll(dot('monthBand'));
     expect(monthBands.length).toBeGreaterThanOrEqual(1);
     // Format: "MAY 2026"
     expect(monthBands[0].textContent).toMatch(/^[A-Z]{3} \d{4}$/);
   });
 
   it('VIEW_DAYS 至少為 MIN_VIEW_DAYS (default zoom=day => 21)', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const dayCells = container.querySelectorAll('.g2-date-cell');
+    const { container } = renderGantt({ projects, data });
+    const dayCells = container.querySelectorAll(dot('dateCell'));
     expect(dayCells.length).toBeGreaterThanOrEqual(21);
   });
 });
@@ -302,35 +325,35 @@ describe('甘特圖 bar 顯示 (normal mode)', () => {
   };
 
   it('每個有 start/end 的任務都渲染一個 task-row', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const taskRows = container.querySelectorAll('.g2-task-row');
+    const { container } = renderGantt({ projects, data });
+    const taskRows = container.querySelectorAll(dot('taskRow'));
     expect(taskRows.length).toBe(2);
   });
 
   it('bar 帶有正確的 tone class', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const bars = container.querySelectorAll('.g2-bar.lime');
+    const { container } = renderGantt({ projects, data });
+    const bars = container.querySelectorAll(dot('bar', 'lime'));
     expect(bars.length).toBeGreaterThan(0);
   });
 
   it('bar 的第一個 segment 顯示任務名稱', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const barNames = container.querySelectorAll('.g2-bar-name');
+    const { container } = renderGantt({ projects, data });
+    const barNames = container.querySelectorAll(dot('barName'));
     const names = [...barNames].map(el => el.textContent);
     expect(names).toContain('設計稿');
     expect(names).toContain('開發');
   });
 
   it('bar 的第一個 segment 顯示工時 (hours > 0)', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const hrs = container.querySelectorAll('.g2-bar-hrs');
+    const { container } = renderGantt({ projects, data });
+    const hrs = container.querySelectorAll(dot('barHrs'));
     expect([...hrs].some(el => el.textContent === '8h')).toBe(true);
   });
 
   it('hours=0 的任務 bar 有 placeholder class', () => {
     const phData = { P1: { T1: makeTask('T1', '待估', '2026-05-11', '2026-05-13', 0) } };
-    const { container } = render(<Gantt projects={projects} data={phData} />);
-    const bar = container.querySelector('.g2-bar.placeholder');
+    const { container } = renderGantt({ projects, data: phData });
+    const bar = container.querySelector(dot('bar', 'placeholder'));
     expect(bar).toBeTruthy();
   });
 
@@ -339,15 +362,15 @@ describe('甘特圖 bar 顯示 (normal mode)', () => {
     const crossData = {
       P1: { T1: makeTask('T1', '跨週', '2026-05-11', '2026-05-19', 12) },
     };
-    const { container } = render(<Gantt projects={projects} data={crossData} />);
-    const barNames = container.querySelectorAll('.g2-bar-name');
+    const { container } = renderGantt({ projects, data: crossData });
+    const barNames = container.querySelectorAll(dot('barName'));
     const texts = [...barNames].map(el => el.textContent);
     expect(texts).toContain('續');
   });
 
   it('專案 banner 顯示在該專案任務之前', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const banner = container.querySelector('.g2-proj-banner');
+    const { container } = renderGantt({ projects, data });
+    const banner = container.querySelector(dot('projBanner'));
     expect(banner.textContent).toContain('專案A');
   });
 });
@@ -367,45 +390,45 @@ describe('疊圖模式 (overlayMode)', () => {
   };
 
   it('點擊疊圖模式按鈕後切換為 overlay layout', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
+    const { container } = renderGantt({ projects, data });
     const overlayBtn = screen.getByText('疊圖模式');
     fireEvent.click(overlayBtn);
-    expect(container.querySelector('.g2-track-body.g2-overlay')).toBeTruthy();
+    expect(container.querySelector(dot('trackBody', 'overlay'))).toBeTruthy();
   });
 
   it('疊圖模式下，相同 taskId 的任務合併為同一 row', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
+    const { container } = renderGantt({ projects, data });
     fireEvent.click(screen.getByText('疊圖模式'));
     // T1 from both projects should be in one row
-    const taskRows = container.querySelectorAll('.g2-task-row');
+    const taskRows = container.querySelectorAll(dot('taskRow'));
     expect(taskRows.length).toBe(1);
   });
 
   it('疊圖模式下，同一 row 有多個不同 tone 的 bar', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
+    const { container } = renderGantt({ projects, data });
     fireEvent.click(screen.getByText('疊圖模式'));
-    const mintBars = container.querySelectorAll('.g2-bar.lime');
-    const peachBars = container.querySelectorAll('.g2-bar.peach');
+    const mintBars = container.querySelectorAll(dot('bar', 'lime'));
+    const peachBars = container.querySelectorAll(dot('bar', 'peach'));
     expect(mintBars.length).toBeGreaterThan(0);
     expect(peachBars.length).toBeGreaterThan(0);
   });
 
 
   it('疊圖模式左側顯示 proj-dots 標記', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
+    const { container } = renderGantt({ projects, data });
     fireEvent.click(screen.getByText('疊圖模式'));
-    const dots = container.querySelectorAll('.g2-proj-dots .g2-pd');
+    const dots = container.querySelectorAll(dot('projDots') + ' ' + dot('pd'));
     expect(dots.length).toBe(2);
   });
 
 
   it('再次點擊疊圖模式按鈕可恢復普通模式', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
+    const { container } = renderGantt({ projects, data });
     const btn = screen.getByText('疊圖模式');
     fireEvent.click(btn);
-    expect(container.querySelector('.g2-track-body.g2-overlay')).toBeTruthy();
+    expect(container.querySelector(dot('trackBody', 'overlay'))).toBeTruthy();
     fireEvent.click(btn);
-    expect(container.querySelector('.g2-track-body.g2-overlay')).toBeFalsy();
+    expect(container.querySelector(dot('trackBody', 'overlay'))).toBeFalsy();
   });
 });
 
@@ -417,8 +440,8 @@ describe('今天線 & 里程碑', () => {
   it('今天在可視範圍時渲染 today-line', () => {
     const projects = [makeProject('P1', '專案A')];
     const data = { P1: { T1: makeTask('T1', '任務', '2026-05-11', '2026-05-20') } };
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const line = container.querySelector('.g2-today-line');
+    const { container } = renderGantt({ projects, data });
+    const line = container.querySelector(dot('todayLine'));
     expect(line).toBeTruthy();
   });
 
@@ -430,8 +453,8 @@ describe('今天線 & 里程碑', () => {
 
     const projects = [makeProject('P1', '專案A', { campaignStart: fmtD(soon) })];
     const data = { P1: { T1: makeTask('T1', '任務', fmtD(today), fmtD(addD(today, 10))) } };
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const ms = container.querySelectorAll('.g2-milestone');
+    const { container } = renderGantt({ projects, data });
+    const ms = container.querySelectorAll(dot('milestone'));
     expect(ms.length).toBeGreaterThan(0);
   });
 });
@@ -451,33 +474,33 @@ describe('專案篩選', () => {
   };
 
   it('初始時所有專案都被勾選', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const chips = container.querySelectorAll('.g2-chip.checked');
+    const { container } = renderGantt({ projects, data });
+    const chips = container.querySelectorAll(dot('chip', 'checked'));
     expect(chips.length).toBe(2);
   });
 
   it('取消一個專案後，其任務不再顯示', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const chips = container.querySelectorAll('.g2-chip');
+    const { container } = renderGantt({ projects, data });
+    const chips = container.querySelectorAll(dot('chip'));
     const chipA = [...chips].find(el => el.textContent.includes('專案A'));
     fireEvent.click(chipA);
-    const banners = container.querySelectorAll('.g2-proj-banner');
+    const banners = container.querySelectorAll(dot('projBanner'));
     const bannerTexts = [...banners].map(b => b.textContent);
     expect(bannerTexts.some(t => t.includes('專案A'))).toBe(false);
   });
 
   it('不能取消最後一個專案（至少保留一個）', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const chipA = [...container.querySelectorAll('.g2-chip')].find(el => el.textContent.includes('專案A'));
+    const { container } = renderGantt({ projects, data });
+    const chipA = [...container.querySelectorAll(dot('chip'))].find(el => el.textContent.includes('專案A'));
     fireEvent.click(chipA); // uncheck A
-    const chipB = [...container.querySelectorAll('.g2-chip')].find(el => el.textContent.includes('專案B'));
+    const chipB = [...container.querySelectorAll(dot('chip'))].find(el => el.textContent.includes('專案B'));
     fireEvent.click(chipB); // try to uncheck B — should not work
-    const checked = container.querySelectorAll('.g2-chip.checked');
+    const checked = container.querySelectorAll(dot('chip', 'checked'));
     expect(checked.length).toBe(1);
   });
 
   it('篩選計數顯示正確', () => {
-    render(<Gantt projects={projects} data={data} />);
+    renderGantt({ projects, data });
     expect(screen.getByText('· 顯示 2 / 2 個專案')).toBeInTheDocument();
   });
 });
@@ -491,26 +514,26 @@ describe('Zoom 切換', () => {
   const data = { P1: { T1: makeTask('T1', '任務', '2026-05-11', '2026-05-15') } };
 
   it('預設為「日」zoom level', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const activeZoom = container.querySelector('.g2-zoom-toggle button.active');
+    const { container } = renderGantt({ projects, data });
+    const activeZoom = container.querySelector(dot('zoomToggle') + ' button' + dot('active'));
     expect(activeZoom.textContent).toContain('日');
   });
 
   it('切換到「週」zoom 後欄寬變小、天數增加', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const weekBtn = [...container.querySelectorAll('.g2-zoom-toggle button')]
+    const { container } = renderGantt({ projects, data });
+    const weekBtn = [...container.querySelectorAll(dot('zoomToggle') + ' button')]
       .find(b => b.textContent.includes('週'));
     fireEvent.click(weekBtn);
-    const dayCells = container.querySelectorAll('.g2-date-cell');
+    const dayCells = container.querySelectorAll(dot('dateCell'));
     expect(dayCells.length).toBeGreaterThanOrEqual(42);
   });
 
   it('切換到「時」zoom 後欄寬變大、天數減少', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const hourBtn = [...container.querySelectorAll('.g2-zoom-toggle button')]
+    const { container } = renderGantt({ projects, data });
+    const hourBtn = [...container.querySelectorAll(dot('zoomToggle') + ' button')]
       .find(b => b.textContent.includes('時'));
     fireEvent.click(hourBtn);
-    const dayCells = container.querySelectorAll('.g2-date-cell');
+    const dayCells = container.querySelectorAll(dot('dateCell'));
     expect(dayCells.length).toBeGreaterThanOrEqual(14);
   });
 });
@@ -521,18 +544,18 @@ describe('Zoom 切換', () => {
 
 describe('空資料狀態', () => {
   it('無專案時顯示 empty state', () => {
-    const { container } = render(<Gantt projects={[]} data={{}} />);
+    const { container } = renderGantt({ projects: [], data: {} });
     expect(container.querySelector('.empty')).toBeTruthy();
   });
 
   it('專案無任何任務資料時顯示 empty state', () => {
     const projects = [makeProject('P1', '空專案')];
-    const { container } = render(<Gantt projects={projects} data={{ P1: {} }} />);
+    const { container } = renderGantt({ projects, data: { P1: {} } });
     expect(container.querySelector('.empty')).toBeTruthy();
   });
 
   it('empty state 顯示提示文字', () => {
-    render(<Gantt projects={[]} data={{}} />);
+    renderGantt({ projects: [], data: {} });
     expect(screen.getByText(/設定啟動日期後即可看到甘特圖/)).toBeInTheDocument();
   });
 });
@@ -546,33 +569,33 @@ describe('Tooltip 互動', () => {
   const data = { P1: { T1: makeTask('T1', '設計稿', '2026-05-11', '2026-05-15', 8) } };
 
   it('滑鼠移入 bar 時顯示 tooltip', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const bar = container.querySelector('.g2-bar');
+    const { container } = renderGantt({ projects, data });
+    const bar = container.querySelector(dot('bar'));
     if (bar) {
       fireEvent.mouseEnter(bar);
-      const tooltip = container.querySelector('.g2-tooltip');
+      const tooltip = container.querySelector(dot('tooltip'));
       expect(tooltip).toBeTruthy();
     }
   });
 
   it('tooltip 包含任務名、專案名、日期範圍', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const bar = container.querySelector('.g2-bar');
+    const { container } = renderGantt({ projects, data });
+    const bar = container.querySelector(dot('bar'));
     if (bar) {
       fireEvent.mouseEnter(bar);
-      const tooltip = container.querySelector('.g2-tooltip');
+      const tooltip = container.querySelector(dot('tooltip'));
       expect(tooltip.textContent).toContain('設計稿');
       expect(tooltip.textContent).toContain('專案A');
     }
   });
 
   it('滑鼠移出 bar 時 tooltip 消失', () => {
-    const { container } = render(<Gantt projects={projects} data={data} />);
-    const bar = container.querySelector('.g2-bar');
+    const { container } = renderGantt({ projects, data });
+    const bar = container.querySelector(dot('bar'));
     if (bar) {
       fireEvent.mouseEnter(bar);
       fireEvent.mouseLeave(bar);
-      const tooltip = container.querySelector('.g2-tooltip');
+      const tooltip = container.querySelector(dot('tooltip'));
       expect(tooltip).toBeFalsy();
     }
   });

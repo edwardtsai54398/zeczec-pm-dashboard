@@ -27,13 +27,14 @@ export function WorkspaceProvider({ children }) {
     catch (e) { console.error('schedule error', e); return { sch: {}, miles: {} }; }
   }, [projects, settings]);
 
-  // 甘特圖釘選同樣只改本地 projects。
-  const updateTaskPin = useCallback((pid, taskId, { pinnedStart, pinnedHours, pinnedWait }) => {
-    setProjects((v) => v.map((p) => {
-      if (p.id !== pid) return p;
-      return {
-        ...p,
-        tasks: p.tasks.map((t) => {
+  // 甘特圖釘選：先寫雲端,成功後才覆蓋本地(連帶觸發重算),失敗就維持原狀交給彈窗顯示。
+  const updateTaskPin = useCallback(
+    async (pid, taskId, { pinnedStart, pinnedHours, pinnedWait }) => {
+      const target = projects.find((p) => p.id === pid);
+      if (!target) return;
+      const nextProject = {
+        ...target,
+        tasks: target.tasks.map((t) => {
           if (t.id !== taskId) return t;
           const next = { ...t };
           if (pinnedStart) next.pinnedStart = pinnedStart; else delete next.pinnedStart;
@@ -42,8 +43,12 @@ export function WorkspaceProvider({ children }) {
           return next;
         }),
       };
-    }));
-  }, [setProjects]);
+      const saved = await saveProjectToCloud(nextProject);
+      // 用回傳的版號專案覆蓋本地,下一次儲存才不會卡樂觀鎖。
+      setProjects((v) => v.map((p) => (p.id === saved.id ? saved : p)));
+    },
+    [projects, saveProjectToCloud, setProjects],
+  );
 
   const value = {
     projects, setProjects, settings, setSettings, loaded,
