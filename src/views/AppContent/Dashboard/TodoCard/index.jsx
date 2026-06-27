@@ -4,7 +4,7 @@ import { getTone, WEEK } from '../../shared.js';
 import { taskKey, taskUntil } from '../utils.js';
 import styles from './TodoCard.module.css';
 
-export function TodoCard({ tasks, today, done, onToggle }) {
+export default function TodoCard({ tasks, today, done, onToggle }) {
   return (
     <div className="card">
       <div className="card-title">

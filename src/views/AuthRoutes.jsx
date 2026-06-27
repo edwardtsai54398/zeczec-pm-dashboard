@@ -1,8 +1,8 @@
 import { Navigate } from 'react-router-dom';
 import { useAuthContext } from '../context/AuthContext.jsx';
-import { Login } from '../components/Login/index.jsx';
-import { Onboarding } from '../components/Onboarding/index.jsx';
-import { Loading } from '../components/Loading.jsx';
+import Login from '../components/Login/index.jsx';
+import Onboarding from '../components/Onboarding/index.jsx';
+import Loading from '../components/Loading.jsx';
 
 // /login:已登入且取過名 → 直接進 App;已登入但還沒名字 → 去取名頁。
 export function LoginRoute() {

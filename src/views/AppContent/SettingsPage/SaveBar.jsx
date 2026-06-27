@@ -3,7 +3,7 @@ import styles from './SettingsPage.module.css';
 
 // 三個編輯器共用的動作列:只在 dirty 時出現「還原 / 儲存」。
 // saving 與錯誤狀態各編輯器獨立,所以放在這裡而非容器。
-export function SaveBar({ dirty, onSave, onDiscard }) {
+export default function SaveBar({ dirty, onSave, onDiscard }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 

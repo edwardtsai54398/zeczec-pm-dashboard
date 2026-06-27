@@ -4,7 +4,7 @@ import styles from './Login.module.css';
 
 // Magic link 登入畫面。註冊與登入是同一個動作:
 // 第一次出現的 email → Supabase 自動建帳號；已存在的 email → 當作登入。
-export function Login() {
+export default function Login() {
   const [email, setEmail] = useState('');
   // 'idle'（待輸入）| 'sending'（寄送中）| 'sent'（已寄出）| 'error'（寄送失敗）
   const [status, setStatus] = useState('idle');
@@ -36,7 +36,6 @@ export function Login() {
           <>
             <div className={styles.title}>📧 信寄出囉</div>
             <p className={styles.subtitle}>
-              這個帳號尚未註冊<br />
               系統已將登入連結寄到：<br />
               <strong className={styles.email}>{email.trim()}</strong><br />
               請到信箱點連結完成登入。

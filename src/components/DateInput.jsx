@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
 const POPUP_W = 228;
 
-export function DateInput({ value, onChange, className, style }) {
+export default function DateInput({ value, onChange, className, style }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const triggerRef = useRef(null);

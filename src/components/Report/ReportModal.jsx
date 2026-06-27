@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import * as Sentry from '@sentry/react';
-import { Modal } from '../Modal.jsx';
+import Modal from '../Modal.jsx';
 import { getSettingsSnapshot } from '../SettingsIO/settingsIO.js';
 import styles from './Report.module.css';
 
@@ -19,7 +19,7 @@ function handleReport(text, view) {
   });
 }
 
-export function ReportModal({ open, onClose, view }) {
+export default function ReportModal({ open, onClose, view }) {
   const [text, setText] = useState('');
   const [sent, setSent] = useState(false);
   const textareaRef = useRef(null);

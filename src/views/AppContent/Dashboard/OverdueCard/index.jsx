@@ -5,7 +5,7 @@ import { getTone } from '../../shared.js';
 import { taskKey } from '../utils.js';
 import styles from './OverdueCard.module.css';
 
-export function OverdueCard({ tasks, today, dismissed, onDismiss }) {
+export default function OverdueCard({ tasks, today, dismissed, onDismiss }) {
   const [expanded, setExpanded] = useState(false);
 
   const visible = tasks.filter((task) => !dismissed[taskKey(task)]);

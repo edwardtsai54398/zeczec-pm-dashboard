@@ -1,8 +1,8 @@
-import { AvatarMenu } from "../SettingsIO/AvatarMenu.jsx";
+import AvatarMenu from "../SettingsIO/AvatarMenu.jsx";
 import { useAuthContext } from "../../context/AuthContext.jsx";
 import styles from "./Topbar.module.css";
 
-export function Topbar({ projectCount, showAvatar }) {
+export default function Topbar({ projectCount, showAvatar }) {
   const { workspaces } = useAuthContext();
   const workspaceName = workspaces[0]?.name;
 

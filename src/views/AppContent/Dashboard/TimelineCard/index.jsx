@@ -5,7 +5,7 @@ import { taskKey, taskUntil } from '../utils.js';
 
 // 近七日活動:未來七日內即將開始的任務(不含今日)。
 // 沿用全域 .todo-* 清單樣式,本身沒有專屬樣式故不需 module.css。
-export function TimelineCard({ tasks, done, onToggle }) {
+export default function TimelineCard({ tasks, done, onToggle }) {
   const upcomingTasks = tasks.filter((task) => task.startIdx > 0);
 
   return (

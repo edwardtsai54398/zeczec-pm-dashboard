@@ -6,13 +6,13 @@ import RandomCat from '../../../components/CatSvg/RandomCat.jsx';
 import { useAuthContext } from '../../../context/AuthContext.jsx';
 import { useWorkspace } from '../../../context/WorkspaceContext.jsx';
 import { useCloudWorkspaceState } from '../../../hooks/useCloudWorkspaceState.js';
-import { MilestonesCard } from './MilestonesCard/index.jsx';
-import { TimelineCard } from './TimelineCard/index.jsx';
-import { TodoCard } from './TodoCard/index.jsx';
-import { OverdueCard } from './OverdueCard/index.jsx';
+import MilestonesCard from './MilestonesCard/index.jsx';
+import TimelineCard from './TimelineCard/index.jsx';
+import TodoCard from './TodoCard/index.jsx';
+import OverdueCard from './OverdueCard/index.jsx';
 import styles from './Dashboard.module.css';
 
-export function Dashboard() {
+export default function Dashboard() {
   const { projects, sch: data, miles } = useWorkspace();
   const navigate = useNavigate();
 

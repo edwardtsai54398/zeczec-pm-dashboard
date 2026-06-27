@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { DateInput } from '../../../components/DateInput.jsx';
-import { SaveBar } from './SaveBar.jsx';
+import DateInput from '../../../components/DateInput.jsx';
+import SaveBar from './SaveBar.jsx';
 import styles from './SettingsPage.module.css';
 
 // 不可用時段編輯器:草稿是 blackouts 陣列。
 // newBlackout 是「新增表單」的本地暫存,還沒按新增前不算進草稿,所以不影響 dirty。
-export function BlackoutEditor({ draft, onChange, dirty, onSave, onDiscard }) {
+export default function BlackoutEditor({ draft, onChange, dirty, onSave, onDiscard }) {
   const [newBlackout, setNewBlackout] = useState({ name: '', start: '', end: '' });
 
   const addBlackout = () => {

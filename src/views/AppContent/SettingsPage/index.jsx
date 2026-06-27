@@ -3,15 +3,15 @@ import { useBlocker } from 'react-router-dom';
 import { useWorkspace } from '../../../context/WorkspaceContext.jsx';
 import { useAuthContext } from '../../../context/AuthContext.jsx';
 import { useDraftEditor } from '../../../hooks/useDraftEditor.js';
-import { UnsavedChangesModal } from '../../../components/UnsavedChangesModal.jsx';
-import { DailyHoursEditor } from './DailyHoursEditor.jsx';
-import { CatCompanionEditor } from './CatCompanionEditor.jsx';
-import { BlackoutEditor } from './BlackoutEditor.jsx';
+import UnsavedChangesModal from '../../../components/UnsavedChangesModal.jsx';
+import DailyHoursEditor from './DailyHoursEditor.jsx';
+import CatCompanionEditor from './CatCompanionEditor.jsx';
+import BlackoutEditor from './BlackoutEditor.jsx';
 import styles from './SettingsPage.module.css';
 
 // 設定頁:三個編輯器各自有草稿/儲存。
 // 工時、不可用時段是 workspace 設定(走 workspaces.settings);貓咪是個人偏好(走 profiles.preferences)。
-export function SettingsPage() {
+export default function SettingsPage() {
   const { settings, saveSettingsToCloud } = useWorkspace();
   const { preferences, savePreferences } = useAuthContext();
 

@@ -1,9 +1,9 @@
-import { SaveBar } from './SaveBar.jsx';
+import SaveBar from './SaveBar.jsx';
 import styles from './SettingsPage.module.css';
 
 // 貓咪陪伴編輯器:草稿是 { catEnabled, catCount }。
 // 改用「按下儲存才寫雲端」,所以開關與數量都只改草稿,不再即時落地。
-export function CatCompanionEditor({ draft, onChange, dirty, onSave, onDiscard }) {
+export default function CatCompanionEditor({ draft, onChange, dirty, onSave, onDiscard }) {
   return (
     <div className="card">
       <div className="card-title"><span>貓咪陪伴</span></div>

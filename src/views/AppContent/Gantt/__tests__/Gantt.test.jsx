@@ -11,7 +11,7 @@ vi.mock('../../../../context/WorkspaceContext.jsx', () => ({
   useWorkspace: () => mockWorkspace,
 }));
 
-import { Gantt } from '../index.jsx';
+import Gantt from '../index.jsx';
 
 // CSS Module 的 class 在測試會被 hash,故用 styles 物件組出實際選擇器。
 // dot('bar','lime') => '.<barHash>.<limeHash>'

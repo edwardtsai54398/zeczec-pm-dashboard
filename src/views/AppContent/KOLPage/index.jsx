@@ -3,9 +3,9 @@ import { useBlocker } from 'react-router-dom';
 import { fmtF, pD, addD } from '../../../lib/dateUtils.js';
 import { useWorkspace } from '../../../context/WorkspaceContext.jsx';
 import { useDraftEditor } from '../../../hooks/useDraftEditor.js';
-import { UnsavedChangesModal } from '../../../components/UnsavedChangesModal.jsx';
+import UnsavedChangesModal from '../../../components/UnsavedChangesModal.jsx';
 import { getTone } from '../shared.js';
-import { DateInput } from '../../../components/DateInput.jsx';
+import DateInput from '../../../components/DateInput.jsx';
 import styles from './KOLPage.module.css';
 
 const KOL_MILESTONES = [
@@ -22,7 +22,7 @@ const KOL_MILESTONES = [
 
 // KOL 合作清單頁:草稿單位是「一個專案的整包 KOLs」。
 // 新增/編輯/刪除多個 KOL 都只改本地草稿,按「儲存」才一次寫回雲端(走 projects 整列儲存)。
-export function KOLPage() {
+export default function KOLPage() {
   const { projects, setProjects, saveProjectToCloud } = useWorkspace();
   const [sel, setSel] = useState(projects[0]?.id || "");
   const [showForm, setShowForm] = useState(false);

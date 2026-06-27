@@ -4,7 +4,7 @@ import styles from './Onboarding.module.css';
 // 第一次登入(profiles 還沒有這個人的 row)時顯示的取名畫面。
 // 取名完成 → onDone(name) 會把名字 + 預設偏好寫進 profiles，
 // 寫入成功後上層的 profile 狀態一變，這個畫面就自動被換成 App。
-export function Onboarding({ onDone }) {
+export default function Onboarding({ onDone }) {
   const [name, setName] = useState('');
   // 'idle'(待輸入) | 'saving'(建立中) | 'error'(建立失敗)
   const [status, setStatus] = useState('idle');

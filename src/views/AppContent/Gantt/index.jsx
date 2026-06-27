@@ -4,7 +4,7 @@ import { TONES } from '../shared.js';
 import RandomCat from '../../../components/CatSvg/RandomCat.jsx';
 import { readPreference } from '../../../lib/preference.js';
 import { useWorkspace } from '../../../context/WorkspaceContext.jsx';
-import { TaskEditModal } from './TaskEditModal/index.jsx';
+import TaskEditModal from './TaskEditModal/index.jsx';
 import styles from './Gantt.module.css';
 
 const WEEKEND_BAR_TASKS = new Set(['7.3', '7.5', '7.7', '7.8', '7.10', '8.2', '8.4', '8.6', '8.8', '8.10']);
@@ -90,7 +90,7 @@ function mulberry32(seed) {
 // 每次「整頁載入」隨機一次的 seed、
 const SESSION_CAT_SEED = (Math.random() * 4294967296) >>> 0;
 
-export function Gantt() {
+export default function Gantt() {
   // 資料層直接從 context 取(比照 Dashboard / KOLPage),route 只負責 render。
   const { projects, sch: data, settings, updateTaskPin } = useWorkspace();
 

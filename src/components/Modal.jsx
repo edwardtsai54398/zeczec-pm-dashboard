@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 
 // 共用彈窗基底：遮罩 + 盒子 + 點外面/Esc 關閉 + 開啟時 focus。
 // 沿用全域 .modal-overlay / .modal-box 樣式（index.css），內容由 children 決定。
-export function Modal({ open, onClose, initialFocusRef, children }) {
+export default function Modal({ open, onClose, initialFocusRef, children }) {
   useEffect(() => {
     if (open) initialFocusRef?.current?.focus();
   }, [open, initialFocusRef]);

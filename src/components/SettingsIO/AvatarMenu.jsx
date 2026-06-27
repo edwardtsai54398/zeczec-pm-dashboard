@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabaseClient.js';
 import { exportSettings, importSettings } from './settingsIO.js';
 import styles from './AvatarMenu.module.css';
 
-export function AvatarMenu() {
+export default function AvatarMenu() {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
   const fileRef = useRef(null);

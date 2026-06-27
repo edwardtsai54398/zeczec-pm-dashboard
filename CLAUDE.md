@@ -53,6 +53,35 @@ Dashboard/
 跟元件相關的**純資料/工具函式**(非 React 元件)可以集中放在同層的 `utils.js`,
 不算「多個元件」。
 
+## 元件 `.jsx` 用 `export default`,不要具名匯出
+
+承上:一個元件 `.jsx` 只放**一個** React 元件,所以這支檔對外就只有「那一個元件」,
+直接 `export default`,不要具名匯出。匯入端跟著用 default import(不加大括號)。
+
+❌ 不要這樣(具名匯出 + 具名匯入):
+```jsx
+// components/Topbar/index.jsx
+export function Topbar({ projectCount }) { ... }
+// 匯入端
+import { Topbar } from './components/Topbar/index.jsx';
+```
+
+✅ 改成預設匯出:
+```jsx
+// components/Topbar/index.jsx
+export default function Topbar({ projectCount }) { ... }
+// 匯入端
+import Topbar from './components/Topbar/index.jsx';
+```
+
+例外:**本來就不是「單一元件」的檔**維持具名匯出(因為一支檔有多個對外名稱,
+或匯出的根本不是元件),不適用這條:
+- **context 檔**:`AuthContext.jsx` / `WorkspaceContext.jsx` 同時匯出 Provider 元件
+  和對應 hook(`useAuthContext` / `useWorkspace`),hook 一定得具名,整支維持具名匯出。
+- **非元件的模組檔**:`router.jsx` 匯出的是 route 設定物件,不是 React 元件。
+- **開發用工具檔**:`tweaks-panel.jsx` 一支集中放了多個 Tweak 小工具與 `useTweaks`。
+- **route adapter**:`AuthRoutes.jsx` 一支放了 `LoginRoute` / `OnboardingRoute` 兩個薄殼。
+
 ## 不要寫 inline style 物件
 
 ❌ 不要這樣（把靜態樣式寫成 JS 物件）:
@@ -189,7 +218,9 @@ export function DashboardRoute() {
 
 ## 其他慣例
 
-- 元件用**具名匯出**:`export function Foo() {}`(預設匯出只用在像 ErrorFallback 這種既有檔)。
+- 元件用**預設匯出**:`export default function Foo() {}`,匯入端用 default import(詳見上面
+  〈元件 `.jsx` 用 `export default`〉;context / `router.jsx` / `tweaks-panel.jsx` / `AuthRoutes.jsx`
+  這類多重匯出或非元件檔例外,維持具名匯出)。
 - 註解用**繁體中文**,而且寫「為什麼」而不是「做什麼」,只在邏輯不直觀處註解,簡單程式碼不加。
 - 每個 `.module.css` 開頭放一行註解,說明這支樣式 scope 了哪個元件、放了什麼。
 - 測試放在元件旁的 `__tests__/` 資料夾,檔名 `ComponentName.test.jsx`。

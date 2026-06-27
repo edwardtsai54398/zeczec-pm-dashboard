@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
-import { Modal } from './Modal.jsx';
+import Modal from './Modal.jsx';
 
-export function UnsavedChangesModal({ open, onDiscard, onSave, onClose }) {
+export default function UnsavedChangesModal({ open, onDiscard, onSave, onClose }) {
   const saveRef = useRef(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');

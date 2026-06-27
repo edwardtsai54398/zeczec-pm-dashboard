@@ -1,11 +1,11 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
-import { ProtectedLayout } from './views/ProtectedLayout.jsx';
+import ProtectedLayout from './views/ProtectedLayout.jsx';
 import { LoginRoute, OnboardingRoute } from './views/AuthRoutes.jsx';
-import { Dashboard } from './views/AppContent/Dashboard/index.jsx';
-import { Gantt } from './views/AppContent/Gantt/index.jsx';
-import { KOLPage } from './views/AppContent/KOLPage/index.jsx';
-import { SettingsPage } from './views/AppContent/SettingsPage/index.jsx';
-import { ProjectPage } from './views/AppContent/ProjectPage/index.jsx';
+import Dashboard from './views/AppContent/Dashboard/index.jsx';
+import Gantt from './views/AppContent/Gantt/index.jsx';
+import KOLPage from './views/AppContent/KOLPage/index.jsx';
+import SettingsPage from './views/AppContent/SettingsPage/index.jsx';
+import ProjectPage from './views/AppContent/ProjectPage/index.jsx';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginRoute /> },

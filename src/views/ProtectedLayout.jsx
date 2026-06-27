@@ -4,10 +4,10 @@ import { useAuthContext } from '../context/AuthContext.jsx';
 import { WorkspaceProvider, useWorkspace } from '../context/WorkspaceContext.jsx';
 import { useTweaks, TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakToggle } from '../tweaks-panel.jsx';
 import { useTheme } from '../hooks/useTheme.js';
-import { Rail } from '../components/Rail.jsx';
-import { Topbar } from '../components/Topbar/index.jsx';
-import { Report } from '../components/Report/Report.jsx';
-import { Loading } from '../components/Loading.jsx';
+import Rail from '../components/Rail.jsx';
+import Topbar from '../components/Topbar/index.jsx';
+import Report from '../components/Report/Report.jsx';
+import Loading from '../components/Loading.jsx';
 
 function AppShell() {
   const { projects, loaded } = useWorkspace();
@@ -43,7 +43,7 @@ function AppShell() {
   );
 }
 
-export function ProtectedLayout() {
+export default function ProtectedLayout() {
   const { session, loading, profile, profileStatus } = useAuthContext();
 
   // 還在問登入狀態 / 查 profile → 先別決定要不要跳轉,避免閃一下登入頁。

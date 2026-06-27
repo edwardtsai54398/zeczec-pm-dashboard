@@ -2,7 +2,7 @@ import { fmt } from '../../../../lib/dateUtils.js';
 import { getTone } from '../../shared.js';
 import styles from './MilestonesCard.module.css';
 
-export function MilestonesCard({ projects, miles, onJump }) {
+export default function MilestonesCard({ projects, miles, onJump }) {
   return (
     <div className={`card ${styles.msCard}`}>
       <div className="card-title">

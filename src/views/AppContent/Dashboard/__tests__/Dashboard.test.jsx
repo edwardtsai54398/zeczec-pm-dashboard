@@ -49,7 +49,7 @@ vi.mock('../../../../hooks/useCloudWorkspaceState.js', async () => {
   };
 });
 
-import { Dashboard } from '../index.jsx';
+import Dashboard from '../index.jsx';
 
 // Fixed today: 2024-01-15 (Monday)
 const TODAY = new Date('2024-01-15T10:00:00');

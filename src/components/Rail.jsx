@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { NAV } from '../constants.js';
 
-export function Rail() {
+export default function Rail() {
   return (
     <aside className="rail">
       <div className="rail-mark" title="募資專案管理">

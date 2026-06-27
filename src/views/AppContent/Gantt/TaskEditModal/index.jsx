@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { fmt, pD } from '../../../../lib/dateUtils.js';
 import { BT } from '../../../../lib/tasks.js';
-import { DateInput } from '../../../../components/DateInput.jsx';
+import DateInput from '../../../../components/DateInput.jsx';
 import styles from './TaskEditModal.module.css';
 
 // 雙擊甘特條後彈出:可改寫該任務的工時、等待天數,或釘選開始日。
-export function TaskEditModal({ state, projects, data, onSave, onClose }) {
+export default function TaskEditModal({ state, projects, data, onSave, onClose }) {
   const project = projects.find((p) => p.id === state.pid);
   const projectTask = (project?.tasks || []).find((task) => task.id === state.taskId);
   const scheduled = data[state.pid]?.[state.taskId];

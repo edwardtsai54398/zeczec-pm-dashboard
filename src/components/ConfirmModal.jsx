@@ -1,7 +1,7 @@
 import { useRef } from 'react';
-import { Modal } from './Modal.jsx';
+import Modal from './Modal.jsx';
 
-export function ConfirmModal({ open, title, message, confirmLabel, onConfirm, onCancel }) {
+export default function ConfirmModal({ open, title, message, confirmLabel, onConfirm, onCancel }) {
   const confirmRef = useRef(null);
 
   return (

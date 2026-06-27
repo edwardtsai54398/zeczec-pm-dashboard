@@ -1,8 +1,8 @@
-import { SaveBar } from './SaveBar.jsx';
+import SaveBar from './SaveBar.jsx';
 import styles from './SettingsPage.module.css';
 
 // 每日工時編輯器:草稿就是一個數字(hoursPerDay)。
-export function DailyHoursEditor({ draft, onChange, dirty, onSave, onDiscard }) {
+export default function DailyHoursEditor({ draft, onChange, dirty, onSave, onDiscard }) {
   return (
     <div className="card">
       <div className="card-title"><span>每日工時</span></div>
