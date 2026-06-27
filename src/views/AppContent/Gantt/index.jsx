@@ -13,11 +13,9 @@ const LABEL_W = 240;
 const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const MONTH_EN = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
-const ZOOM_LEVELS = [
-  { key: 'hour', colW: 80, viewDays: 14, label: '時', icon: 'ti-clock' },
-  { key: 'day',  colW: 52, viewDays: 21, label: '日', icon: 'ti-calendar' },
-  { key: 'week', colW: 24, viewDays: 42, label: '週', icon: 'ti-calendar-month' },
-];
+// 每日欄寬與最少顯示天數(沿用原縮放「日」級距,移除縮放功能後固定為此)
+const COL_W = 52;
+const MIN_VIEW_DAYS = 21;
 
 function toneKey(project) {
   if (project?.tone && TONES[project.tone]) return project.tone;
@@ -99,11 +97,6 @@ export default function Gantt() {
   // 貓咪偏好直接讀本地快取(localStorage)。
   const preference = useMemo(readPreference, []);
 
-  const [zoomIndex, setZoomIndex] = useState(1);
-  const zoom = ZOOM_LEVELS[zoomIndex];
-  const COL_W = zoom.colW;
-  const MIN_VIEW_DAYS = zoom.viewDays;
-
   const dateRange = useMemo(() => {
     let earliest = null, latest = null;
     projects.forEach(project => {
@@ -132,7 +125,7 @@ export default function Gantt() {
     const endPlusWeek = addD(dateRange.latest, 7);
     const span = dBt(viewStart, endPlusWeek);
     return Math.max(MIN_VIEW_DAYS, span + 1);
-  }, [dateRange.latest, viewStart, MIN_VIEW_DAYS]);
+  }, [dateRange.latest, viewStart]);
 
   const [overlayMode, setOverlayMode] = useState(false);
   const [selected, setSelected] = useState(() => new Set(projects.map(project => project.id)));
@@ -192,7 +185,7 @@ export default function Gantt() {
     const month = visibleDate.getMonth() + 1;
     const year = visibleDate.getFullYear();
     setDateLabel(`${year} 年 ${month} 月`);
-  }, [viewStart, COL_W]);
+  }, [viewStart]);
 
   useEffect(() => {
     updateDateLabel(scrollRef.current?.scrollLeft || 0);
@@ -371,7 +364,7 @@ export default function Gantt() {
       }
     }
     return placed;
-  }, [overlayMode, normalGroups, overlayRows, viewStart, VIEW_DAYS, COL_W, preference.catEnabled, preference.catCount]);
+  }, [overlayMode, normalGroups, overlayRows, viewStart, VIEW_DAYS, preference.catEnabled, preference.catCount]);
 
   const milestones = useMemo(() => {
     const result = [];
@@ -459,8 +452,6 @@ export default function Gantt() {
         })}
         <span className={styles.filterCount}>· 顯示 {selected.size} / {projects.length} 個專案</span>
         <span className={styles.filterSpacer} />
-        <button className={styles.chipMini}><i className="ti ti-filter"></i> 篩選任務</button>
-        <button className={styles.chipMini}><i className="ti ti-download"></i> 匯出</button>
       </div>
 
       <div className={styles.card}>
@@ -502,23 +493,6 @@ export default function Gantt() {
                 <span className={`${styles.swatch} ${styles.ms}`}></span>0 工時
               </div>
             </div>
-
-            <div className={styles.zoomToggle}>
-              {ZOOM_LEVELS.map((zoomLevel, index) => (
-                <button key={zoomLevel.key}
-                  className={index === zoomIndex ? styles.active : ''}
-                  onClick={() => setZoomIndex(index)}>
-                  <i className={`ti ${zoomLevel.icon} ${styles.zoomIcon}`}></i>{zoomLevel.label}
-                </button>
-              ))}
-            </div>
-
-            <button className={styles.iconSq} title="設定">
-              <i className="ti ti-adjustments-horizontal"></i>
-            </button>
-            <button className={styles.iconSq} title="全螢幕">
-              <i className="ti ti-maximize"></i>
-            </button>
           </div>
         </div>
 

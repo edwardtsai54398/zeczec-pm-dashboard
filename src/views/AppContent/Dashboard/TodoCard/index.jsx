@@ -9,7 +9,6 @@ export default function TodoCard({ tasks, today, done, onToggle }) {
     <div className="card">
       <div className="card-title">
         <span>今日待辦</span>
-        <button className="card-icon-btn"><i className="ti ti-arrow-up-right"></i></button>
       </div>
       <p className="card-sub">{today.getMonth() + 1}月{today.getDate()}日 · 週{WEEK[today.getDay()]}</p>
       <div className="todo-list">

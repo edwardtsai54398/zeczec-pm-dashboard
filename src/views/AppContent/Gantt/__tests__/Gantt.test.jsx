@@ -304,7 +304,7 @@ describe('日期格 header 渲染', () => {
     expect(monthBands[0].textContent).toMatch(/^[A-Z]{3} \d{4}$/);
   });
 
-  it('VIEW_DAYS 至少為 MIN_VIEW_DAYS (default zoom=day => 21)', () => {
+  it('VIEW_DAYS 至少為 MIN_VIEW_DAYS (21)', () => {
     const { container } = renderGantt({ projects, data });
     const dayCells = container.querySelectorAll(dot('dateCell'));
     expect(dayCells.length).toBeGreaterThanOrEqual(21);
@@ -506,40 +506,7 @@ describe('專案篩選', () => {
 });
 
 // ============================================================
-// 9. Zoom 切換
-// ============================================================
-
-describe('Zoom 切換', () => {
-  const projects = [makeProject('P1', '專案A')];
-  const data = { P1: { T1: makeTask('T1', '任務', '2026-05-11', '2026-05-15') } };
-
-  it('預設為「日」zoom level', () => {
-    const { container } = renderGantt({ projects, data });
-    const activeZoom = container.querySelector(dot('zoomToggle') + ' button' + dot('active'));
-    expect(activeZoom.textContent).toContain('日');
-  });
-
-  it('切換到「週」zoom 後欄寬變小、天數增加', () => {
-    const { container } = renderGantt({ projects, data });
-    const weekBtn = [...container.querySelectorAll(dot('zoomToggle') + ' button')]
-      .find(b => b.textContent.includes('週'));
-    fireEvent.click(weekBtn);
-    const dayCells = container.querySelectorAll(dot('dateCell'));
-    expect(dayCells.length).toBeGreaterThanOrEqual(42);
-  });
-
-  it('切換到「時」zoom 後欄寬變大、天數減少', () => {
-    const { container } = renderGantt({ projects, data });
-    const hourBtn = [...container.querySelectorAll(dot('zoomToggle') + ' button')]
-      .find(b => b.textContent.includes('時'));
-    fireEvent.click(hourBtn);
-    const dayCells = container.querySelectorAll(dot('dateCell'));
-    expect(dayCells.length).toBeGreaterThanOrEqual(14);
-  });
-});
-
-// ============================================================
-// 10. 空資料狀態
+// 9. 空資料狀態
 // ============================================================
 
 describe('空資料狀態', () => {

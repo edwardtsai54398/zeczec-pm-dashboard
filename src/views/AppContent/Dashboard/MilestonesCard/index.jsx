@@ -2,14 +2,11 @@ import { fmt } from '../../../../lib/dateUtils.js';
 import { getTone } from '../../shared.js';
 import styles from './MilestonesCard.module.css';
 
-export default function MilestonesCard({ projects, miles, onJump }) {
+export default function MilestonesCard({ projects, miles }) {
   return (
     <div className={`card ${styles.msCard}`}>
       <div className="card-title">
         <span>里程碑</span>
-        <button className="card-icon-btn" onClick={onJump} title="開啟甘特圖">
-          <i className="ti ti-chart-gantt"></i>
-        </button>
       </div>
       <p className="card-sub">所有專案的問卷與開賣日期</p>
       <div className={styles.msBubbleStack}>

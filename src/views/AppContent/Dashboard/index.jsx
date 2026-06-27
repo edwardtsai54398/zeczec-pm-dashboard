@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { dBt, pD } from '../../../lib/dateUtils.js';
 import { WEEK, greetingFor } from '../shared.js';
 import RandomCat from '../../../components/CatSvg/RandomCat.jsx';
@@ -14,7 +13,6 @@ import styles from './Dashboard.module.css';
 
 export default function Dashboard() {
   const { projects, sch: data, miles } = useWorkspace();
-  const navigate = useNavigate();
 
   const today = useMemo(() => { const date = new Date(); date.setHours(0, 0, 0, 0); return date; }, []);
   const hour = new Date().getHours();
@@ -124,7 +122,7 @@ export default function Dashboard() {
           <OverdueCard tasks={overdueTasks} today={today} dismissed={overdueDone} onDismiss={dismissOverdue} />
         )}
         <TimelineCard tasks={timelineTasks} done={todoDone} onToggle={toggleTodoDone} />
-        <MilestonesCard projects={projects} miles={miles} onJump={() => navigate('/gantt')} />
+        <MilestonesCard projects={projects} miles={miles} />
       </div>
     </div>
   );

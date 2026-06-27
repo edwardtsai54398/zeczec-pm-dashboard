@@ -12,7 +12,6 @@ export default function TimelineCard({ tasks, done, onToggle }) {
     <div className="card">
       <div className="card-title">
         <span>近七日活動</span>
-        <button className="card-icon-btn" title="今天"><i className="ti ti-calendar"></i></button>
       </div>
       <p className="card-sub">未來 7 天即將開始的任務（不含今日）</p>
       <div className="todo-list">
