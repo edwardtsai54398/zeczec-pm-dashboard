@@ -1,0 +1,21 @@
+/* AddMemberModal:新增成員彈窗的欄位與錯誤訊息。
+   外觀沿用全域 .modal-overlay/.modal-box/.modal-title/.modal-actions 與 .text-in。 */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.error {
+  margin: 0 0 16px;
+  color: #b4453c; /* 一次性錯誤紅,允許寫死 */
+  font-size: 13px;
+}

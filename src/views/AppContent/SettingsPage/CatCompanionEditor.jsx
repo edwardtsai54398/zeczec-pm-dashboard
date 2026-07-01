@@ -3,9 +3,10 @@ import styles from './SettingsPage.module.css';
 
 // 貓咪陪伴編輯器:草稿是 { catEnabled, catCount }。
 // 改用「按下儲存才寫雲端」,所以開關與數量都只改草稿,不再即時落地。
+// 「個人化設定」的一段,外層 .card 由 SettingsPage 提供;屬個人偏好,不受工作區角色限制。
 export default function CatCompanionEditor({ draft, onChange, dirty, onSave, onDiscard }) {
   return (
-    <div className="card">
+    <div className={styles.section}>
       <div className="card-title"><span>貓咪陪伴</span></div>
       <p className="card-sub">在甘特圖的空白處隨機放置貓咪</p>
       <label className={styles.catToggle}>

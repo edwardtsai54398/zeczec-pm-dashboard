@@ -3,6 +3,7 @@ import { useBlocker } from 'react-router-dom';
 import { fmtF, pD, addD } from '../../../lib/dateUtils.js';
 import { useWorkspace } from '../../../context/WorkspaceContext.jsx';
 import { useDraftEditor } from '../../../hooks/useDraftEditor.js';
+import { usePermissions } from '../../../hooks/usePermissions.js';
 import UnsavedChangesModal from '../../../components/UnsavedChangesModal.jsx';
 import { getTone } from '../shared.js';
 import DateInput from '../../../components/DateInput.jsx';
@@ -24,6 +25,8 @@ const KOL_MILESTONES = [
 // 新增/編輯/刪除多個 KOL 都只改本地草稿,按「儲存」才一次寫回雲端(走 projects 整列儲存)。
 export default function KOLPage() {
   const { projects, setProjects, saveProjectToCloud } = useWorkspace();
+  const { can } = usePermissions();
+  const canEdit = can('editKOL'); // viewer 唯讀:隱藏新增/刪除/儲存,日期欄停用
   const [sel, setSel] = useState(projects[0]?.id || "");
   const [showForm, setShowForm] = useState(false);
   const [newKol, setNewKol] = useState({ name: "", wave: 1 });
@@ -136,26 +139,28 @@ export default function KOLPage() {
       <div className="card">
         <div className="card-title">
           <span>KOL 合作清單</span>
-          <div className={styles.titleActions}>
-            {kols.dirty && (
-              <>
-                {saveErr && <span className={styles.saveErr}>{saveErr}</span>}
-                <button className={styles.discardBtn} onClick={kols.discard} disabled={saving}
-                        title="還原成已儲存的 KOL 清單">還原</button>
-                <button className={styles.saveBtn} onClick={handleSave} disabled={saving}
-                        title="儲存這個專案的 KOL 清單到雲端">
-                  <i className="ti ti-device-floppy"></i>{saving ? "儲存中…" : "儲存"}
-                </button>
-              </>
-            )}
-            <button className="ghost-btn" onClick={() => setShowForm(!showForm)}>
-              <i className="ti ti-plus"></i>新增 KOL
-            </button>
-          </div>
+          {canEdit && (
+            <div className={styles.titleActions}>
+              {kols.dirty && (
+                <>
+                  {saveErr && <span className={styles.saveErr}>{saveErr}</span>}
+                  <button className={styles.discardBtn} onClick={kols.discard} disabled={saving}
+                          title="還原成已儲存的 KOL 清單">還原</button>
+                  <button className={styles.saveBtn} onClick={handleSave} disabled={saving}
+                          title="儲存這個專案的 KOL 清單到雲端">
+                    <i className="ti ti-device-floppy"></i>{saving ? "儲存中…" : "儲存"}
+                  </button>
+                </>
+              )}
+              <button className="ghost-btn" onClick={() => setShowForm(!showForm)}>
+                <i className="ti ti-plus"></i>新增 KOL
+              </button>
+            </div>
+          )}
         </div>
         <p className="card-sub">填入「寄出產品」日期後，會自動推算後續里程碑；編輯後需按「儲存」才會寫入雲端</p>
 
-        {showForm && (
+        {canEdit && showForm && (
           <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap", padding: 14, background: "var(--surface-tint)", borderRadius: "var(--r)", marginBottom: 14 }}>
             <div>
               <div style={{ fontSize: 11, color: "var(--ink-3)", marginBottom: 4, fontWeight: 500 }}>KOL 名稱</div>
@@ -175,7 +180,7 @@ export default function KOLPage() {
         )}
 
         {!draftKols.length && !showForm && (
-          <div className="todo-empty">尚未新增 KOL · 按右上「新增 KOL」</div>
+          <div className="todo-empty">{canEdit ? "尚未新增 KOL · 按右上「新增 KOL」" : "尚未新增 KOL"}</div>
         )}
 
         {draftKols.map((k) => (
@@ -190,15 +195,17 @@ export default function KOLPage() {
                   第 {k.wave} 波
                 </span>
               </div>
-              <button className="iconbtn-x" onClick={() => removeKol(k.id)}>
-                <i className="ti ti-trash"></i>
-              </button>
+              {canEdit && (
+                <button className="iconbtn-x" onClick={() => removeKol(k.id)}>
+                  <i className="ti ti-trash"></i>
+                </button>
+              )}
             </div>
             <div className="kol-body">
               {k.milestones.map((ms) => (
                 <div key={ms.id} className="kol-row">
                   <span className="lbl">{ms.name}</span>
-                  <DateInput value={ms.date || ""}
+                  <DateInput value={ms.date || ""} disabled={!canEdit}
                          onChange={(e) => updateMilestone(k.id, ms.id, e.target.value)} />
                 </div>
               ))}

@@ -31,14 +31,14 @@ async function ensureOwnerWorkspace(userId, workspaceName) {
     workspaceId = created.id;
   }
 
-  // ③ 建立 owner membership;upsert + onConflict 確保重送不撞 UNIQUE
+  // ③ 建立 owner membership。一次性 bootstrap,用純 insert,不要 upsert/onConflict:
+  //    帶 onConflict 會生成 ON CONFLICT DO UPDATE,把 workspace_members 的 UPDATE 政策也拉進
+  //    RLS 評估;而 onboarding 當下使用者還不是成員、UPDATE 政策過不了 → 整筆被擋(42501)。
+  //    純 insert 只走 INSERT 政策(owner bootstraps own membership,已實測會過)。
   const { error: memberErr } = await supabase
     .from('workspace_members')
-    .upsert(
-      { workspace_id: workspaceId, user_id: userId, role: 'owner' },
-      { onConflict: 'workspace_id,user_id' }
-    );
-  if (memberErr) throw memberErr;
+    .insert({ workspace_id: workspaceId, user_id: userId, role: 'owner' });
+  if (memberErr && memberErr.code !== '23505') throw memberErr;
 }
 
 // 查登入者在 profiles 表有沒有名字，藉此分辨第一次（要取名）還是老使用者。

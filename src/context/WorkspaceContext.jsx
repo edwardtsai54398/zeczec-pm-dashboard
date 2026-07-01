@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, useCallback } from 'react';
 import { runScheduleV2 } from '../lib/schedulerV2.js';
-import { D_PROJECTS, D_SETTINGS } from '../constants.js';
+import { D_SETTINGS } from '../constants.js';
 import { usePersistence } from '../hooks/usePersistence.js';
 import { useCloudProjects } from '../hooks/useCloudProjects.js';
 import { useCloudWorkspaceSettings } from '../hooks/useCloudWorkspaceSettings.js';
@@ -12,8 +12,10 @@ const WorkspaceContext = createContext(null);
 export function WorkspaceProvider({ children }) {
   const { workspaceId } = useAuthContext();
 
+  // 預設專案給空陣列(不再塞示範資料):雲端才是唯一真相,全新使用者從零開始,
+  // 也避免 useCloudProjects 的 seedFromLocal 把預設 demo 誤當成本地資料搬上雲。
   const { projects, setProjects, settings, setSettings, loaded } =
-    usePersistence(D_PROJECTS, D_SETTINGS);
+    usePersistence([], D_SETTINGS);
 
   // 雲端資料層:載入覆蓋全域 projects,並提供存/新增/封存。
   const { saveProjectToCloud, insertProjectToCloud, archiveProjectInCloud } =

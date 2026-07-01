@@ -4,6 +4,7 @@ import { TONES } from '../shared.js';
 import RandomCat from '../../../components/CatSvg/RandomCat.jsx';
 import { readPreference } from '../../../lib/preference.js';
 import { useWorkspace } from '../../../context/WorkspaceContext.jsx';
+import { usePermissions } from '../../../hooks/usePermissions.js';
 import TaskEditModal from './TaskEditModal/index.jsx';
 import styles from './Gantt.module.css';
 
@@ -91,6 +92,8 @@ const SESSION_CAT_SEED = (Math.random() * 4294967296) >>> 0;
 export default function Gantt() {
   // 資料層直接從 context 取(比照 Dashboard / KOLPage),route 只負責 render。
   const { projects, sch: data, settings, updateTaskPin } = useWorkspace();
+  const { can } = usePermissions();
+  const canEdit = can('editGantt'); // viewer 不能訂選任務日期(double click 無效)
 
   const today = useMemo(() => { const date = new Date(); date.setHours(0, 0, 0, 0); return date; }, []);
 
@@ -246,9 +249,10 @@ export default function Gantt() {
 
   const handleBarDblClick = useCallback((event, task, project) => {
     event.stopPropagation();
+    if (!canEdit) return; // 唯讀:double click 不開啟訂選彈窗
     setTip(null);
     setPinState({ pid: project.id, taskId: task.id });
-  }, []);
+  }, [canEdit]);
 
   const normalGroups = useMemo(() => {
     return selectedProjects.map(project => {

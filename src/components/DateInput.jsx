@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
 const POPUP_W = 228;
 
-export default function DateInput({ value, onChange, className, style }) {
+export default function DateInput({ value, onChange, className, style, disabled }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const triggerRef = useRef(null);
@@ -101,10 +101,11 @@ export default function DateInput({ value, onChange, className, style }) {
         type="button"
         className={`di-trigger${className ? ` ${className}` : ''}`}
         style={style}
+        disabled={disabled}
         onClick={openPicker}
       >
         <span className={display ? undefined : 'di-ph'}>{display || '選擇日期'}</span>
-        {value && <span className="di-x" onClick={clear}><i className="ti ti-x"></i></span>}
+        {value && !disabled && <span className="di-x" onClick={clear}><i className="ti ti-x"></i></span>}
       </button>
       {popup}
     </div>

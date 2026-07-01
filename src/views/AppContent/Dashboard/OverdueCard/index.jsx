@@ -5,7 +5,7 @@ import { getTone } from '../../shared.js';
 import { taskKey } from '../utils.js';
 import styles from './OverdueCard.module.css';
 
-export default function OverdueCard({ tasks, today, dismissed, onDismiss }) {
+export default function OverdueCard({ tasks, today, dismissed, onDismiss, readOnly }) {
   const [expanded, setExpanded] = useState(false);
 
   const visible = tasks.filter((task) => !dismissed[taskKey(task)]);
@@ -29,7 +29,8 @@ export default function OverdueCard({ tasks, today, dismissed, onDismiss }) {
           const key = taskKey(task);
           return (
             <div key={key} className="todo-row">
-              <div className="todo-check" onClick={() => onDismiss(key)}></div>
+              <div className={`todo-check${readOnly ? " readonly" : ""}`}
+                   onClick={readOnly ? undefined : () => onDismiss(key)}></div>
               <div className="todo-text">
                 <div className="todo-name">{task.n}</div>
                 <div className="todo-meta">

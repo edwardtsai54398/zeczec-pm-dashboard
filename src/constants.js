@@ -1,6 +1,3 @@
-import { mkTasks } from './lib/schedulerV2.js';
-import { BT } from './lib/tasks.js';
-
 export const STORAGE_KEY = "cfpm4";
 
 
@@ -43,6 +40,9 @@ export const D_SETTINGS = {
 // 每位使用者各自的 UI 偏好(貓)單獨存一個 key,與 workspace 共用的 cfpm4(專案+排程設定)分開。
 export const PREFERENCE_KEY = "preference";
 
+// 目前選到的工作區(多工作區切換用),純本機 UI 狀態,不上雲。
+export const ACTIVE_WORKSPACE_KEY = "active_workspace";
+
 export const DEFAULT_PREFERENCES = {
   catEnabled: true,
   catCount: 20,
@@ -52,32 +52,3 @@ export const DEFAULT_WORKSPACE_SETTINGS = {
   hoursPerDay: D_SETTINGS.hoursPerDay,
   blackouts: D_SETTINGS.blackouts,
 };
-
-export const D_PROJECTS = [
-  {
-    id: "saba", name: "SABA RO 飲水機", template: "full",
-    startDate: "2026-05-19", surveyStart: "", surveyEnd: "",
-    campaignStart: "", campaignEnd: "",
-    tone: "lavender", color: "#7F77DD",
-    tasks: mkTasks("full"), kols: [],
-    notes: "電檢完成，可立刻啟動",
-  },
-  {
-    id: "bleeq", name: "BleeqUP AI 眼鏡", template: "pm",
-    startDate: "", surveyStart: "", surveyEnd: "",
-    campaignStart: "", campaignEnd: "",
-    tone: "lime", color: "#1D9E75",
-    tasks: mkTasks("pm").map((t) => ({ ...t, enabled: t.enabled && !(BT.find((b) => b.id === t.id) || {}).sh })),
-    kols: [],
-    notes: "電檢未通過。不拍攝，用原廠素材",
-  },
-  {
-    id: "inmo", name: "INMO AI 眼鏡", template: "pm",
-    startDate: "", surveyStart: "", surveyEnd: "",
-    campaignStart: "", campaignEnd: "",
-    tone: "peach", color: "#D85A30",
-    tasks: mkTasks("pm").map((t) => ({ ...t, enabled: t.enabled && !(BT.find((b) => b.id === t.id) || {}).sh })),
-    kols: [],
-    notes: "電檢未通過。不拍攝，用原廠素材",
-  },
-];

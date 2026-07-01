@@ -1,0 +1,107 @@
+/* WorkspaceSwitcher:Topbar 的工作區切換藥丸 + 下拉清單。
+   原本散在 Topbar.module.css 的 .workspacePill / .workspaceName 屬本元件專屬,搬來這裡。 */
+
+.wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+/* 觸發藥丸:沿用原工作區藥丸外觀,改成可點的 <button> */
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 240px;
+  height: 40px;
+  padding: 0 14px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.trigger:hover { border-color: var(--border-strong); }
+.trigger:focus-visible {
+  outline: 2px solid var(--accent-deep);
+  outline-offset: 2px;
+}
+
+/* 名稱過長時截斷,避免把藥丸撐爆版面 */
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 9999;
+  min-width: 220px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: popIn 0.14s ease;
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  background: transparent;
+  border-radius: var(--r-sm);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.item:hover { background: var(--surface-tint); color: var(--ink); }
+
+/* 目前工作區:背景高亮 + 文字加深 */
+.itemActive {
+  background: var(--surface-tint);
+  color: var(--ink);
+}
+
+/* 打勾固定寬度,讓未選的項目名稱也對齊 */
+.check {
+  flex: 0 0 16px;
+  display: inline-flex;
+  justify-content: center;
+  color: var(--accent-deep);
+}
+
+.itemName {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.role {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-3);
+}

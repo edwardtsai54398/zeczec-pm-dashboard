@@ -6,9 +6,15 @@ import styles from '../Gantt.module.css';
 // Gantt 自己從 context 取 projects/排程/設定/釘選儲存(比照 Dashboard 測試),
 // 測試把 WorkspaceContext 換成可控假實作,每次 renderGantt 注入該情境的資料。
 const mockWorkspace = vi.hoisted(() => ({ projects: [], sch: {}, settings: {}, updateTaskPin: () => {} }));
+// role 可由各測試切換:owner/editor 能訂選日期,viewer 的 double click 應無效。
+const mockAuth = vi.hoisted(() => ({ role: 'owner' }));
 
 vi.mock('../../../../context/WorkspaceContext.jsx', () => ({
   useWorkspace: () => mockWorkspace,
+}));
+
+vi.mock('../../../../context/AuthContext.jsx', () => ({
+  useAuthContext: () => mockAuth,
 }));
 
 import Gantt from '../index.jsx';

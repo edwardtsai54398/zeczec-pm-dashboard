@@ -5,6 +5,7 @@ import RandomCat from '../../../components/CatSvg/RandomCat.jsx';
 import { useAuthContext } from '../../../context/AuthContext.jsx';
 import { useWorkspace } from '../../../context/WorkspaceContext.jsx';
 import { useCloudWorkspaceState } from '../../../hooks/useCloudWorkspaceState.js';
+import { usePermissions } from '../../../hooks/usePermissions.js';
 import MilestonesCard from './MilestonesCard/index.jsx';
 import TimelineCard from './TimelineCard/index.jsx';
 import TodoCard from './TodoCard/index.jsx';
@@ -20,8 +21,12 @@ export default function Dashboard() {
   // 完成狀態(打勾/過期關閉)的唯一資料源,直接從 context 取(比照 KOLPage / SettingsPage),
   // 再串給底下卡片。todo_done 由今日待辦與近七日活動共用,故必須集中一處避免互蓋。
   const { workspaceId, session } = useAuthContext();
+  const { can } = usePermissions();
   const { todoDone, overdueDone, toggleTodoDone, dismissOverdue } =
     useCloudWorkspaceState(workspaceId, session?.user?.id);
+
+  // viewer 看得到卡片但不能操作(勾選/關閉);逾期卡 viewer 完全看不到。
+  const canOperate = can('editDashboard');
 
   const allTasks = useMemo(() => {
     const result = [];
@@ -117,11 +122,11 @@ export default function Dashboard() {
       </section>
 
       <div className={styles.dashCards}>
-        <TodoCard tasks={todayTasks} today={today} done={todoDone} onToggle={toggleTodoDone} />
-        {overdueTasks.length > 0 && (
-          <OverdueCard tasks={overdueTasks} today={today} dismissed={overdueDone} onDismiss={dismissOverdue} />
+        <TodoCard tasks={todayTasks} today={today} done={todoDone} onToggle={toggleTodoDone} readOnly={!canOperate} />
+        {can('viewOverdue') && overdueTasks.length > 0 && (
+          <OverdueCard tasks={overdueTasks} today={today} dismissed={overdueDone} onDismiss={dismissOverdue} readOnly={!canOperate} />
         )}
-        <TimelineCard tasks={timelineTasks} done={todoDone} onToggle={toggleTodoDone} />
+        <TimelineCard tasks={timelineTasks} done={todoDone} onToggle={toggleTodoDone} readOnly={!canOperate} />
         <MilestonesCard projects={projects} miles={miles} />
       </div>
     </div>

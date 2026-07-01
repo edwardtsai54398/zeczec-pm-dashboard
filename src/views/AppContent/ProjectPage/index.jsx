@@ -6,6 +6,7 @@ import { mkTasks } from '../../../lib/schedulerV2.js';
 import { TONE_PALETTE } from '../../../constants.js';
 import { useWorkspace } from '../../../context/WorkspaceContext.jsx';
 import { useProjectEditor } from '../../../hooks/useProjectEditor.js';
+import { usePermissions } from '../../../hooks/usePermissions.js';
 import { getTone } from '../shared.js';
 import DateInput from '../../../components/DateInput.jsx';
 import ConfirmModal from '../../../components/ConfirmModal.jsx';
@@ -32,7 +33,9 @@ export default function ProjectPage({ isNew = false }) {
     projects, setProjects, miles,
     saveProjectToCloud, insertProjectToCloud, archiveProjectInCloud,
   } = useWorkspace();
-  
+  const { can } = usePermissions();
+  const canEdit = can('editProject'); // viewer 唯讀:停用編輯欄位、隱藏新增/封存/儲存
+
   // 專案頁的草稿/dirty/儲存
   const editor = useProjectEditor({
     projects, sel: id, setProjects, saveProjectToCloud,
@@ -111,16 +114,18 @@ export default function ProjectPage({ isNew = false }) {
             </button>
           );
         })}
-        <button className={`proj-tab ${isNew ? "active" : ""}`} onClick={() => navigate('/project/new')}>
-          <i className="ti ti-plus" style={{ fontSize: 14 }}></i> 新增
-        </button>
+        {canEdit && (
+          <button className={`proj-tab ${isNew ? "active" : ""}`} onClick={() => navigate('/project/new')}>
+            <i className="ti ti-plus" style={{ fontSize: 14 }}></i> 新增
+          </button>
+        )}
       </div>
 
       {editor.draft
         ? <ProjectDetail p={editor.draft} onUpdate={editor.updateDraft} miles={miles[id]}
                          dirty={editor.dirty} onSave={isNew ? handleNewSave : editor.save}
                          onArchive={isNew ? undefined : () => setArchiveTarget(id)}
-                         onCancel={isNew ? handleCancel : undefined} />
+                         onCancel={isNew ? handleCancel : undefined} canEdit={canEdit} />
         : <div className="empty">選擇專案</div>}
 
       <ConfirmModal
@@ -142,7 +147,7 @@ export default function ProjectPage({ isNew = false }) {
   );
 }
 
-function ProjectDetail({ p, onUpdate, miles, dirty, onSave, onArchive, onCancel }) {
+function ProjectDetail({ p, onUpdate, miles, dirty, onSave, onArchive, onCancel, canEdit }) {
   const [exp, setExp] = useState({});
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState("");
@@ -186,17 +191,19 @@ function ProjectDetail({ p, onUpdate, miles, dirty, onSave, onArchive, onCancel 
           <input
             className={styles.name}
             value={p.name}
+            disabled={!canEdit}
             onChange={(e) => onUpdate({ ...p, name: e.target.value })}
           />
           <div className={`tpl-toggle ${styles.toggle}`}>
-            <button onClick={() => onUpdate({ ...p, template: "full", tasks: mkTasks("full") })}
+            <button disabled={!canEdit}
+                    onClick={() => onUpdate({ ...p, template: "full", tasks: mkTasks("full") })}
                     className={p.template === "full" ? "active" : ""}>全自操</button>
-            <button onClick={() => {
+            <button disabled={!canEdit} onClick={() => {
               const ts = mkTasks("pm").map((t) => ({ ...t, enabled: t.enabled && !(BT.find((x) => x.id === t.id) || {}).sh }));
               onUpdate({ ...p, template: "pm", tasks: ts });
             }} className={p.template === "pm" ? "active" : ""}>PM 模式</button>
           </div>
-          {dirty && (
+          {canEdit && dirty && (
             <button className={styles.saveBtn} onClick={handleSave} disabled={saving} title="儲存變更到雲端">
               <i className="ti ti-device-floppy"></i>{saving ? "儲存中…" : "儲存"}
             </button>
@@ -206,7 +213,7 @@ function ProjectDetail({ p, onUpdate, miles, dirty, onSave, onArchive, onCancel 
               <i className="ti ti-x"></i>
             </button>
           )}
-          {onArchive && (
+          {canEdit && onArchive && (
             <button className="iconbtn-x" onClick={onArchive} title="封存專案">
               <i className="ti ti-archive"></i>
             </button>
@@ -214,7 +221,7 @@ function ProjectDetail({ p, onUpdate, miles, dirty, onSave, onArchive, onCancel 
         </div>
         {saveErr && <div className={styles.saveErr}>{saveErr}</div>}
 
-        <textarea className="text-in" rows={2}
+        <textarea className="text-in" rows={2} disabled={!canEdit}
                   placeholder="專案備註…例如：「電檢通過，可立刻啟動」"
                   value={p.notes || ""} onChange={(e) => onUpdate({ ...p, notes: e.target.value })} />
 
@@ -222,7 +229,7 @@ function ProjectDetail({ p, onUpdate, miles, dirty, onSave, onArchive, onCancel 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
           <div className="date-cell tone-lavender">
             <div className="lbl">專案啟動日</div>
-            <DateInput value={p.startDate || ""} onChange={(e) => u("startDate")(e.target.value)} />
+            <DateInput value={p.startDate || ""} disabled={!canEdit} onChange={(e) => u("startDate")(e.target.value)} />
             {!p.startDate && miles?.calcStart && (
               <div className="hint" style={{ color: "var(--t-lavender-ink)" }}>建議 {fmt(miles.calcStart)} 起</div>
             )}
@@ -240,7 +247,7 @@ function ProjectDetail({ p, onUpdate, miles, dirty, onSave, onArchive, onCancel 
         <div className="date-grid" style={{ marginBottom: 10 }}>
           <div className="date-cell tone-lime">
             <div className="lbl">問卷上線日</div>
-            <DateInput value={p.surveyStart || ""} onChange={(e) => {
+            <DateInput value={p.surveyStart || ""} disabled={!canEdit} onChange={(e) => {
               const v = e.target.value;
               const autoEnd = v ? fmtF(addD(pD(v), 30)) : "";
               onUpdate({ ...p, surveyStart: v, surveyEnd: autoEnd });
@@ -249,14 +256,14 @@ function ProjectDetail({ p, onUpdate, miles, dirty, onSave, onArchive, onCancel 
           </div>
           <div className="date-cell tone-lime">
             <div className="lbl">問卷結束日</div>
-            <DateInput value={p.surveyEnd || ""} onChange={(e) => u("surveyEnd")(e.target.value)} />
+            <DateInput value={p.surveyEnd || ""} disabled={!canEdit} onChange={(e) => u("surveyEnd")(e.target.value)} />
             {!p.surveyEnd && p.surveyStart && <div className="hint" style={{ color: "var(--t-lime-ink)" }}>上線日 +30 天</div>}
           </div>
         </div>
         <div className="date-grid">
           <div className="date-cell tone-peach">
             <div className="lbl">募資上線日</div>
-            <DateInput value={p.campaignStart || ""} onChange={(e) => {
+            <DateInput value={p.campaignStart || ""} disabled={!canEdit} onChange={(e) => {
               const v = e.target.value;
               const autoEnd = v ? fmtF(addD(pD(v), 60)) : "";
               onUpdate({ ...p, campaignStart: v, campaignEnd: autoEnd });
@@ -265,7 +272,7 @@ function ProjectDetail({ p, onUpdate, miles, dirty, onSave, onArchive, onCancel 
           </div>
           <div className="date-cell tone-peach">
             <div className="lbl">募資結束日</div>
-            <DateInput value={p.campaignEnd || ""} onChange={(e) => u("campaignEnd")(e.target.value)} />
+            <DateInput value={p.campaignEnd || ""} disabled={!canEdit} onChange={(e) => u("campaignEnd")(e.target.value)} />
             {!p.campaignEnd && p.campaignStart && <div className="hint" style={{ color: "var(--t-peach-ink)" }}>上線日 +60 天</div>}
           </div>
         </div>
@@ -303,7 +310,7 @@ function ProjectDetail({ p, onUpdate, miles, dirty, onSave, onArchive, onCancel 
                 <div className="phase-body">
                   {ts.map((t) => (
                     <label key={t.id} className={`phase-row ${!t.enabled ? "disabled" : ""}`}>
-                      <input type="checkbox" checked={t.enabled} onChange={() => tog(t.id)} />
+                      <input type="checkbox" checked={t.enabled} disabled={!canEdit} onChange={() => tog(t.id)} />
                       <span className="pid">{t.id}</span>
                       <span className="pname">{t.n}</span>
                       <span className="pmeta">

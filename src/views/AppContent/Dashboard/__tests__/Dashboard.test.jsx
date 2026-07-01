@@ -10,6 +10,8 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 // - useNavigate 換成 noop:里程碑卡片「開啟甘特圖」只需可點,測試不實際導頁。
 const mockStore = vi.hoisted(() => ({ todoDone: {}, overdueDone: {} }));
 const mockWorkspace = vi.hoisted(() => ({ projects: [], sch: {}, miles: {} }));
+// role 可由各測試切換,用來驗證 viewer 的權限阻擋(usePermissions 讀的就是這個 role)。
+const mockAuth = vi.hoisted(() => ({ workspaceId: 'w-test', session: { user: { id: 'u-test' } }, role: 'owner' }));
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => () => {},
@@ -20,7 +22,7 @@ vi.mock('../../../../context/WorkspaceContext.jsx', () => ({
 }));
 
 vi.mock('../../../../context/AuthContext.jsx', () => ({
-  useAuthContext: () => ({ workspaceId: 'w-test', session: { user: { id: 'u-test' } } }),
+  useAuthContext: () => mockAuth,
 }));
 
 vi.mock('../../../../hooks/useCloudWorkspaceState.js', async () => {
@@ -86,12 +88,14 @@ describe('Dashboard', () => {
     vi.setSystemTime(TODAY);
     mockStore.todoDone = {};
     mockStore.overdueDone = {};
+    mockAuth.role = 'owner';
   });
 
   afterEach(() => {
     vi.useRealTimers();
     mockStore.todoDone = {};
     mockStore.overdueDone = {};
+    mockAuth.role = 'owner';
   });
 
   // ── 需求一：近七日活動只顯示今天之後、七日內的任務 ──────────────────────────
@@ -374,6 +378,31 @@ describe('Dashboard', () => {
       renderDashboard([p], makeTaskData('p1', tasks));
 
       expect(screen.queryByText('過期未完成')).toBeInTheDocument();
+    });
+  });
+
+  // ── 權限:viewer 看不到過期卡、其他卡不可操作 ──────────────────────────────
+  describe('權限:viewer 的 Dashboard', () => {
+    it('viewer 即使有過期任務也不渲染過期未完成卡片', () => {
+      mockAuth.role = 'viewer';
+      const p = makeProject('p1');
+      const tasks = [makeTask('t1', '逾期任務', '2024-01-10', '2024-01-14')];
+      renderDashboard([p], makeTaskData('p1', tasks));
+
+      expect(screen.queryByText('過期未完成')).not.toBeInTheDocument();
+    });
+
+    it('viewer 點今日待辦的勾選圈不會切換完成狀態', () => {
+      mockAuth.role = 'viewer';
+      const p = makeProject('p1');
+      const tasks = [makeTask('t1', '今天任務', '2024-01-15', '2024-01-15')];
+      const { container } = renderDashboard([p], makeTaskData('p1', tasks));
+
+      const check = container.querySelector('.todo-check');
+      expect(check).toHaveClass('readonly');
+      fireEvent.click(check);
+      // 唯讀:點了也不該進入完成(done)狀態
+      expect(check).not.toHaveClass('done');
     });
   });
 });

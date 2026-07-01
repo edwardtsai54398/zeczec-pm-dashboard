@@ -1,5 +1,6 @@
-/* SettingsPage:設定頁三個編輯器(每日工時 / 貓咪陪伴 / 不可用時段)的版面。
-   scope 了外層容器、數字輸入、貓咪開關列、不可用時段新增表單,以及各編輯器底部的儲存/還原動作列。
+/* SettingsPage:設定頁版面,分「工作區設定」「個人化設定」兩區,標題在卡片外。
+   scope 了外層容器、區塊標題列、卡片內分段與分隔線、數字輸入、貓咪開關列、
+   不可用時段新增表單、工作區成員清單,以及各編輯器底部的儲存/還原動作列。
    卡片本身沿用全域 .card/.card-title/.card-sub。 */
 
 .wrap {
@@ -8,6 +9,43 @@
   flex-direction: column;
   gap: 18px;
 }
+
+/* 區塊標題(工作區設定 / 個人化設定),放在卡片外 */
+.sectionTitle {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  font-family: var(--font-display);
+}
+
+/* 標題列:左標題、右側動作鈕(新增成員) */
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.sectionHead .sectionTitle { margin: 0; }
+
+.addMemberBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+/* 同一張卡內兩段(工時 / 不可用時段)的分隔線 */
+.divider {
+  height: 1px;
+  margin: 22px 0;
+  background: var(--border);
+}
+
+/* 卡內單一分段:把 card-title 的上方間距歸零,讓段落緊貼分隔線 */
+.section > :global(.card-title) { margin-top: 0; }
 
 /* 工時 / 貓咪數量的大數字輸入框 */
 .numberInput {
@@ -114,3 +152,129 @@
 }
 .discardBtn:hover { color: var(--ink); }
 .discardBtn:disabled { opacity: .55; cursor: default; }
+
+/* ── 工作區成員清單(MembersEditor)────────────────────────────── */
+/* 載入中 / 空清單提示 */
+.memberHint {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.memberList {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.memberRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.memberRow:last-child { border-bottom: none; }
+
+/* 名字縮寫小 avatar */
+.memberAvatar {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--font-display);
+}
+
+/* 名字 + email 疊直,佔滿中間、把角色/踢除推到最右 */
+.memberInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.memberName {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.memberEmail {
+  font-size: 12px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 自己那列的「你」小標 */
+.youBadge {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-tint);
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* owner 的角色下拉(覆寫 .text-in 的滿寬,收成剛好包住文字) */
+.roleSelect {
+  flex: none;
+  width: auto;
+  padding: 6px 10px;
+  font-size: 13px;
+  background: var(--surface-tint);
+}
+/* 自己那列的下拉停用:只是不可改,不是壞掉,保持可讀、去掉瀏覽器灰化 */
+.roleSelect:disabled {
+  background: #fff;
+  color: var(--ink-2);
+  cursor: default;
+  opacity: 1;
+}
+
+/* 非 owner / 自己那列:角色純文字 */
+.roleLabel {
+  flex: none;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+/* 踢除按鈕 */
+.removeBtn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 16px;
+  cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.removeBtn:hover {
+  background: var(--surface-tint);
+  color: #b4453c; /* 一次性錯誤紅,允許寫死 */
+}
+
+/* 沒有踢除鈕的列(自己 / 非 owner)補這個佔位,寬度對齊 .removeBtn,讓角色欄跨列對齊 */
+.removeSpacer {
+  flex: none;
+  width: 32px;
+}

@@ -5,7 +5,7 @@ import { taskKey, taskUntil } from '../utils.js';
 
 // 近七日活動:未來七日內即將開始的任務(不含今日)。
 // 沿用全域 .todo-* 清單樣式,本身沒有專屬樣式故不需 module.css。
-export default function TimelineCard({ tasks, done, onToggle }) {
+export default function TimelineCard({ tasks, done, onToggle, readOnly }) {
   const upcomingTasks = tasks.filter((task) => task.startIdx > 0);
 
   return (
@@ -24,8 +24,8 @@ export default function TimelineCard({ tasks, done, onToggle }) {
           const isDone = !!done[key];
           return (
             <div key={key} className="todo-row">
-              <div className={`todo-check ${isDone ? "done" : ""}`}
-                   onClick={() => onToggle(key, taskUntil(task))}>
+              <div className={`todo-check ${isDone ? "done" : ""}${readOnly ? " readonly" : ""}`}
+                   onClick={readOnly ? undefined : () => onToggle(key, taskUntil(task))}>
                 {isDone && <i className="ti ti-check"></i>}
               </div>
               <div className="todo-text">

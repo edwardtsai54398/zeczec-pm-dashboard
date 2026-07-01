@@ -4,7 +4,7 @@ import { getTone, WEEK } from '../../shared.js';
 import { taskKey, taskUntil } from '../utils.js';
 import styles from './TodoCard.module.css';
 
-export default function TodoCard({ tasks, today, done, onToggle }) {
+export default function TodoCard({ tasks, today, done, onToggle, readOnly }) {
   return (
     <div className="card">
       <div className="card-title">
@@ -22,8 +22,8 @@ export default function TodoCard({ tasks, today, done, onToggle }) {
           const urgent = daysLeft <= 3;
           return (
             <div key={key} className="todo-row">
-              <div className={`todo-check ${isDone ? "done" : ""}`}
-                   onClick={() => onToggle(key, taskUntil(task))}>
+              <div className={`todo-check ${isDone ? "done" : ""}${readOnly ? " readonly" : ""}`}
+                   onClick={readOnly ? undefined : () => onToggle(key, taskUntil(task))}>
                 {isDone && <i className="ti ti-check"></i>}
               </div>
               <div className="todo-text">
