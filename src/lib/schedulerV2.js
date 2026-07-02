@@ -7,6 +7,7 @@ import {
   sWD as subWorkDays,
   isWE as isWeekend,
   isBO as isBlackout,
+  fmtF as formatDateKey,
 } from './dateUtils.js';
 
 // dateDef: { baseline, direction?, d?, unit? }
@@ -158,7 +159,8 @@ export function runScheduleV2(projects, settings) {
         const canStart = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.svStart, projState.svEnd, projState.cpStart, projState.cpEnd);
         if (canStart === null || canStart > day) continue;
         const waitEnd = entry.w > 0 ? addWorkDays(day, entry.w, []) : null;
-        projState.done.push(makeRecord(entry, day, day, waitEnd));
+        // 釘選任務直接佔位、不經當日容量分配,整包工時記在釘選日 offset 0
+        projState.done.push(makeRecord(entry, day, day, waitEnd, { [formatDateKey(day)]: { h: entry.hours, o: 0 } }));
         projState.doneMap[entry.id] = { end: day, waitEnd };
       }
     }
@@ -190,7 +192,7 @@ export function runScheduleV2(projects, settings) {
           const canStart = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.svStart, projState.svEnd, projState.cpStart, projState.cpEnd);
           if (canStart === null || canStart > day) break;
           const waitEnd = entry.w > 0 ? addWorkDays(day, entry.w, []) : null;
-          projState.done.push(makeRecord(entry, day, day, waitEnd));
+          projState.done.push(makeRecord(entry, day, day, waitEnd, { [formatDateKey(day)]: { h: 0, o: hoursPerDay - capacity } }));
           projState.doneMap[entry.id] = { end: day, waitEnd };
           projState.qIdx++;
           madeProgress = true;
@@ -233,7 +235,7 @@ export function runScheduleV2(projects, settings) {
             if (canStart !== null && canStart <= day) {
               pool.push({
                 projState,
-                activeTask: { entry, start: day, remaining: entry.hours },
+                activeTask: { entry, start: day, remaining: entry.hours, days: {} },
                 slot: 'main',
                 isNew: true,
                 queueIdx: projState.qIdx,
@@ -251,7 +253,7 @@ export function runScheduleV2(projects, settings) {
           if (candidate !== null) {
             pool.push({
               projState,
-              activeTask: { entry: candidate, start: day, remaining: candidate.hours },
+              activeTask: { entry: candidate, start: day, remaining: candidate.hours, days: {} },
               slot: 'secondary',
               isNew: true,
               queueIdx: candidateIdx,
@@ -282,12 +284,17 @@ export function runScheduleV2(projects, settings) {
         }
 
         const alloc = Math.min(activeTask.remaining, capacity);
+        // 行事曆模式需要「這天實際做幾小時、從當日第幾小時開始」的明細;
+        // o = 當日已被更高優先權任務吃掉的時數,capacity 一天內只減不增,區塊天然不重疊
+        const dateKey = formatDateKey(day);
+        if (!activeTask.days[dateKey]) activeTask.days[dateKey] = { h: 0, o: hoursPerDay - capacity };
+        activeTask.days[dateKey].h += alloc;
         activeTask.remaining -= alloc;
         capacity -= alloc;
 
         if (activeTask.remaining <= 0) {
           const waitEnd = activeTask.entry.w > 0 ? addWorkDays(day, activeTask.entry.w, []) : null;
-          projState.done.push(makeRecord(activeTask.entry, activeTask.start, day, waitEnd));
+          projState.done.push(makeRecord(activeTask.entry, activeTask.start, day, waitEnd, activeTask.days));
           projState.doneMap[activeTask.entry.id] = { end: day, waitEnd };
           if (slot === 'main') projState.currentTask  = null;
           else                 projState.currentTask2 = null;
@@ -334,7 +341,8 @@ function scanFillSlot(projState, day, blackouts, mainActiveId) {
       const canStart = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.svStart, projState.svEnd, projState.cpStart, projState.cpEnd);
       if (canStart !== null && canStart <= day) {
         const wEnd = entry.w > 0 ? addWorkDays(day, entry.w, []) : null;
-        projState.done.push(makeRecord(entry, day, day, wEnd));
+        // 這裡拿不到當日剩餘容量;0 工時任務在行事曆走「全天列」,o 不會被讀取
+        projState.done.push(makeRecord(entry, day, day, wEnd, { [formatDateKey(day)]: { h: 0, o: 0 } }));
         projState.doneMap[entry.id] = { end: day, waitEnd: wEnd };
         inlineProgress = true;
       }
@@ -430,7 +438,8 @@ function taskCanStart(entry, doneMap, projStart, enabledIds, blackouts, svStart,
   return canStart;
 }
 
-function makeRecord(entry, start, end, waitEnd) {
+// days: { 'YYYY-MM-DD': { h: 當日分配工時, o: 當日起始 offset(小時) } },給行事曆週檢視用
+function makeRecord(entry, start, end, waitEnd, days) {
   return {
     ...entry._task,
     id:      entry.id,
@@ -439,6 +448,7 @@ function makeRecord(entry, start, end, waitEnd) {
     start,
     end,
     waitEnd,
+    days:    days || {},
     pid:     entry.pid,
     pn:      entry.pn,
     effH:    entry.hours,

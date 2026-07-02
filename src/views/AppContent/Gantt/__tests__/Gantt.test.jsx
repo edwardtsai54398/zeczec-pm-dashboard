@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { addD } from '../../../../lib/dateUtils.js';
-import styles from '../Gantt.module.css';
+import pageStyles from '../Gantt.module.css';
+import styles from '../GanttView/GanttView.module.css';
+import calStyles from '../CalendarWeek/CalendarWeek.module.css';
 
 // Gantt 自己從 context 取 projects/排程/設定/釘選儲存(比照 Dashboard 測試),
 // 測試把 WorkspaceContext 換成可控假實作,每次 renderGantt 注入該情境的資料。
@@ -21,15 +23,26 @@ import Gantt from '../index.jsx';
 
 // CSS Module 的 class 在測試會被 hash,故用 styles 物件組出實際選擇器。
 // dot('bar','lime') => '.<barHash>.<limeHash>'
+// 拆分後樣式分屬三個 module:dot = 甘特視圖、pageDot = 頁面/篩選列、calDot = 行事曆視圖。
 const dot = (...keys) => '.' + keys.map((key) => styles[key]).join('.');
+const pageDot = (...keys) => '.' + keys.map((key) => pageStyles[key]).join('.');
+const calDot = (...keys) => '.' + keys.map((key) => calStyles[key]).join('.');
 
 // 設定 mock workspace 後渲染 Gantt(Gantt 不再吃 props,改吃 context)。
-function renderGantt({ projects = [], data = {}, settings = {}, updateTaskPin = () => {} } = {}) {
+// 頁面預設是行事曆模式;多數測試針對甘特視圖,故預設先點「甘特圖模式」切過去,
+// 行事曆相關測試傳 view: 'calendar' 留在預設視圖。
+function renderGantt({ projects = [], data = {}, settings = {}, updateTaskPin = () => {}, view = 'gantt' } = {}) {
   mockWorkspace.projects = projects;
   mockWorkspace.sch = data;
   mockWorkspace.settings = settings;
   mockWorkspace.updateTaskPin = updateTaskPin;
-  return render(<Gantt />);
+  const result = render(<Gantt />);
+  if (view === 'gantt') {
+    // 空資料時只渲染 empty state,沒有切換鈕
+    const toGanttButton = screen.queryByText('甘特圖模式');
+    if (toGanttButton) fireEvent.click(toGanttButton);
+  }
+  return result;
 }
 
 // --- Helpers ---
@@ -481,13 +494,13 @@ describe('專案篩選', () => {
 
   it('初始時所有專案都被勾選', () => {
     const { container } = renderGantt({ projects, data });
-    const chips = container.querySelectorAll(dot('chip', 'checked'));
+    const chips = container.querySelectorAll(pageDot('chip', 'checked'));
     expect(chips.length).toBe(2);
   });
 
   it('取消一個專案後，其任務不再顯示', () => {
     const { container } = renderGantt({ projects, data });
-    const chips = container.querySelectorAll(dot('chip'));
+    const chips = container.querySelectorAll(pageDot('chip'));
     const chipA = [...chips].find(el => el.textContent.includes('專案A'));
     fireEvent.click(chipA);
     const banners = container.querySelectorAll(dot('projBanner'));
@@ -497,11 +510,11 @@ describe('專案篩選', () => {
 
   it('不能取消最後一個專案（至少保留一個）', () => {
     const { container } = renderGantt({ projects, data });
-    const chipA = [...container.querySelectorAll(dot('chip'))].find(el => el.textContent.includes('專案A'));
+    const chipA = [...container.querySelectorAll(pageDot('chip'))].find(el => el.textContent.includes('專案A'));
     fireEvent.click(chipA); // uncheck A
-    const chipB = [...container.querySelectorAll(dot('chip'))].find(el => el.textContent.includes('專案B'));
+    const chipB = [...container.querySelectorAll(pageDot('chip'))].find(el => el.textContent.includes('專案B'));
     fireEvent.click(chipB); // try to uncheck B — should not work
-    const checked = container.querySelectorAll(dot('chip', 'checked'));
+    const checked = container.querySelectorAll(pageDot('chip', 'checked'));
     expect(checked.length).toBe(1);
   });
 
@@ -575,7 +588,59 @@ describe('Tooltip 互動', () => {
 });
 
 // ============================================================
-// 12. monday() helper
+// 12. 行事曆模式切換
+// ============================================================
+
+describe('行事曆模式切換', () => {
+  const projects = [
+    makeProject('P1', '專案A'),
+    makeProject('P2', '專案B'),
+  ];
+  const data = {
+    P1: { T1: makeTask('T1', '任務A', '2026-05-11', '2026-05-15') },
+    P2: { T2: makeTask('T2', '任務B', '2026-05-12', '2026-05-16') },
+  };
+
+  it('預設為行事曆視圖:切換鈕顯示「甘特圖模式」,無疊圖鈕,渲染 7 個日欄', () => {
+    const { container } = renderGantt({ projects, data, view: 'calendar' });
+    expect(screen.getByText('甘特圖模式')).toBeInTheDocument();
+    expect(screen.queryByText('疊圖模式')).toBeNull();
+    expect(container.querySelector(dot('taskCol'))).toBeFalsy();
+    expect(container.querySelector(dot('scroll'))).toBeFalsy();
+    expect(container.querySelectorAll(calDot('dayCol')).length).toBe(7);
+  });
+
+  it('點「甘特圖模式」切到甘特視圖:鈕變「行事曆模式」,疊圖鈕出現', () => {
+    const { container } = renderGantt({ projects, data, view: 'calendar' });
+    fireEvent.click(screen.getByText('甘特圖模式'));
+    expect(screen.getByText('行事曆模式')).toBeInTheDocument();
+    expect(screen.getByText('疊圖模式')).toBeInTheDocument();
+    expect(container.querySelector(dot('scroll'))).toBeTruthy();
+    expect(container.querySelectorAll(dot('dateCell')).length).toBeGreaterThanOrEqual(21);
+  });
+
+  it('再點「行事曆模式」切回行事曆視圖', () => {
+    const { container } = renderGantt({ projects, data, view: 'calendar' });
+    fireEvent.click(screen.getByText('甘特圖模式'));
+    fireEvent.click(screen.getByText('行事曆模式'));
+    expect(container.querySelectorAll(calDot('dayCol')).length).toBe(7);
+    expect(container.querySelector(dot('taskCol'))).toBeFalsy();
+  });
+
+  it('篩選 chips 狀態在兩個模式間共用', () => {
+    // 在行事曆模式取消勾選專案A,切到甘特後 banner 應只剩專案B
+    const { container } = renderGantt({ projects, data, view: 'calendar' });
+    const chipA = [...container.querySelectorAll(pageDot('chip'))].find(el => el.textContent.includes('專案A'));
+    fireEvent.click(chipA);
+    expect(container.querySelectorAll(pageDot('chip', 'checked')).length).toBe(1);
+    fireEvent.click(screen.getByText('甘特圖模式'));
+    const banners = [...container.querySelectorAll(dot('projBanner'))].map(el => el.textContent);
+    expect(banners.some(text => text.includes('專案A'))).toBe(false);
+  });
+});
+
+// ============================================================
+// 13. monday() helper
 // ============================================================
 
 describe('monday() helper', () => {

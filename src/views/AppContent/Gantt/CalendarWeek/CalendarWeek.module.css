@@ -1,0 +1,229 @@
+/* CalendarWeek(index.jsx)的 scoped 樣式:週檢視工具列、日期表頭、整天列(0 工時 chips)、
+   期間帶、小時格線主體、任務區塊、里程碑虛線、tooltip 與頁尾。
+   tone 修飾 class(lavender…charcoal)與狀態 class(weekend/blackout/today)皆 scoped。 */
+
+/* calendar card:接手甘特視圖 .card 在頁面裡的填充角色 */
+.card {
+  background: white; border-radius: var(--r-lg);
+  box-shadow: var(--shadow); overflow: hidden;
+  flex: 1; display: flex; flex-direction: column; min-height: 0;
+}
+
+/* toolbar(與甘特視圖同配方,兩視圖各自維護) */
+.toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; background: white;
+  border-bottom: 1px solid var(--border);
+}
+.dateNav { display: flex; align-items: center; gap: 4px; }
+.navBtn {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: transparent; border: none; color: var(--ink-2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; cursor: pointer;
+}
+.navBtn:hover { background: var(--surface-tint); color: var(--ink); }
+.dateLabel {
+  font-size: 16px; font-weight: 500; color: var(--ink);
+  padding: 0 12px; letter-spacing: -0.005em;
+  min-width: 130px; text-align: center;
+}
+.todayBtn {
+  margin-left: 4px; padding: 7px 14px; border-radius: 999px;
+  background: white; border: 1px solid var(--border-strong);
+  color: var(--ink); font-size: 12.5px; font-weight: 500; cursor: pointer;
+}
+.todayBtn:hover { background: var(--surface-tint); }
+.todayIcon { font-size: 11px; margin-right: 4px; }
+.toolbarRight { display: flex; align-items: center; gap: 10px; }
+.modeToggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px 7px 10px; background: white;
+  border: 1.5px solid var(--border-strong); border-radius: 999px;
+  font-size: 13px; font-weight: 500; color: var(--ink);
+  cursor: pointer; transition: all .15s;
+}
+.modeToggle:hover { background: var(--surface-tint); }
+.modeToggleIcon { font-size: 15px; }
+
+/* legend */
+.legend {
+  display: flex; align-items: center; gap: 14px;
+  border-right: 1px solid var(--border);
+  padding-right: 14px; margin-right: 4px;
+}
+.legendItem { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-2); }
+.swatch { width: 14px; height: 12px; border-radius: 3px; }
+.swatch.we {
+  background: repeating-linear-gradient(45deg, var(--ink-4) 0 2px, transparent 2px 4px);
+  background-color: var(--surface-tint);
+  border: 1px solid var(--border);
+}
+.swatch.tl { background: var(--t-peach-ink); border-radius: 50%; width: 12px; }
+.swatch.ms { background: white; border: 1.5px dashed var(--t-lime-ink); height: 14px; }
+
+/* 每一列都是「48px 時間軸 gutter + 7 等分欄」的 grid,彼此天然對齊 */
+.headerRow,
+.allDayRow,
+.periodRow,
+.bodyGrid { display: grid; grid-template-columns: 48px 1fr; }
+.days,
+.daysArea { display: grid; grid-template-columns: repeat(7, 1fr); }
+.gutterCell { border-right: 1px solid var(--border); }
+
+/* 週表頭 */
+.headerRow { border-bottom: 1px solid var(--border); }
+.dayHead {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 4px; padding: 10px 0 8px;
+  border-right: 1px solid var(--border);
+}
+.dayHead.weekend { background: var(--surface-tint); }
+.dayHead.blackout { background: repeating-linear-gradient(45deg, rgba(22,22,19,.06) 0 6px, transparent 6px 12px), var(--surface-tint); }
+.dayName { font-size: 11px; color: var(--ink-3); letter-spacing: 0.04em; line-height: 1; }
+.dayNum {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 500; color: var(--ink);
+  font-variant-numeric: tabular-nums; line-height: 1;
+}
+.dayHead.weekend .dayNum,
+.dayHead.blackout .dayNum { color: var(--ink-3); }
+.dayHead.today .dayName { color: var(--t-peach-ink); font-weight: 600; }
+.dayHead.today .dayNum { background: var(--t-peach-ink); color: white; font-weight: 700; }
+
+/* 整天列:0 工時任務(發文類)的 chips,不佔小時格 */
+.allDayRow { border-bottom: 1px solid var(--border); }
+.allDayCell {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 4px; min-height: 30px;
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+.allDayCell.weekend { background: var(--surface-tint); }
+.chip {
+  border-radius: 4px; font-size: 11px; font-weight: 500;
+  padding: 2px 6px; cursor: default;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.chip.lavender { border: 1.5px dashed var(--t-lavender-ink); color: var(--t-lavender-ink); }
+.chip.lime     { border: 1.5px dashed var(--t-lime-ink);     color: var(--t-lime-ink); }
+.chip.peach    { border: 1.5px dashed var(--t-peach-ink);    color: var(--t-peach-ink); }
+.chip.rose     { border: 1.5px dashed var(--t-rose-ink);     color: var(--t-rose-ink); }
+.chip.sky      { border: 1.5px dashed var(--t-sky-ink);      color: var(--t-sky-ink); }
+.chip.olive    { border: 1.5px dashed var(--t-olive-ink);    color: var(--t-olive-ink); }
+.chip.charcoal { border: 1.5px dashed var(--t-charcoal-ink); color: var(--t-charcoal-ink); }
+
+/* 期間帶(問卷/募資,同甘特視圖 40px 高) */
+.periodRow { border-bottom: 2px solid var(--border); }
+.periodTrack { position: relative; height: 40px; overflow: hidden; }
+.periodBar {
+  position: absolute; top: 5px; bottom: 5px;
+  border-radius: 6px;
+}
+.periodBar.lavender { background: var(--t-lavender); box-shadow: inset 0 0 0 1px #8B85D6; }
+.periodBar.lime     { background: var(--t-lime);     box-shadow: inset 0 0 0 1px #B8C95C; }
+.periodBar.peach    { background: var(--t-peach);    box-shadow: inset 0 0 0 1px #E29A6A; }
+.periodBar.rose     { background: var(--t-rose);     box-shadow: inset 0 0 0 1px rgba(161,64,114,.4); }
+.periodBar.sky      { background: var(--t-sky);      box-shadow: inset 0 0 0 1px rgba(42,110,140,.4); }
+.periodBar.olive    { background: var(--t-olive);    box-shadow: inset 0 0 0 1px rgba(94,120,32,.4); }
+.periodBar.charcoal { background: var(--t-charcoal); box-shadow: inset 0 0 0 1px rgba(61,58,51,.3); }
+
+/* 小時格線主體:每 70px 一條格線用背景漸層畫,不做逐小時 DOM */
+.body { flex: 1; overflow-y: auto; min-height: 0; }
+.gutter {
+  border-right: 1px solid var(--border);
+  background: repeating-linear-gradient(to bottom, transparent 0 69px, var(--border) 69px 70px);
+}
+.dayCol {
+  position: relative; overflow: hidden;
+  border-right: 1px solid var(--border);
+  background: repeating-linear-gradient(to bottom, transparent 0 69px, var(--border) 69px 70px);
+}
+.dayCol.weekend {
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 69px, var(--border) 69px 70px),
+    repeating-linear-gradient(45deg, rgba(22,22,19,.025) 0 6px, transparent 6px 12px);
+  background-color: var(--surface-tint);
+}
+.dayCol.blackout {
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 69px, var(--border) 69px 70px),
+    repeating-linear-gradient(45deg, rgba(22,22,19,.06) 0 6px, transparent 6px 12px);
+  background-color: var(--surface-tint);
+}
+.dayCol.today {
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 69px, var(--border) 69px 70px),
+    linear-gradient(rgba(245,210,181,.15), rgba(245,210,181,.15));
+}
+
+/* 任務區塊:top/height 由 JS 依「當日分配小時 × 70px」計算 */
+.block {
+  position: absolute; left: 3px; right: 3px;
+  border-radius: 6px; padding: 4px 8px;
+  display: flex; flex-direction: column; gap: 2px;
+  font-size: 13px; font-weight: 500;
+  overflow: hidden; cursor: default; transition: transform .12s;
+}
+.block:hover { transform: translateY(-1px); z-index: 5; }
+.block.lavender { background: var(--t-lavender); color: var(--t-lavender-ink); box-shadow: inset 0 0 0 1px #8B85D6; }
+.block.lime     { background: var(--t-lime);     color: var(--t-lime-ink);     box-shadow: inset 0 0 0 1px #B8C95C; }
+.block.peach    { background: var(--t-peach);    color: var(--t-peach-ink);    box-shadow: inset 0 0 0 1px #E29A6A; }
+.block.rose     { background: var(--t-rose);     color: var(--t-rose-ink);     box-shadow: inset 0 0 0 1px rgba(161,64,114,.4); }
+.block.sky      { background: var(--t-sky);      color: var(--t-sky-ink);      box-shadow: inset 0 0 0 1px rgba(42,110,140,.4); }
+.block.olive    { background: var(--t-olive);    color: var(--t-olive-ink);    box-shadow: inset 0 0 0 1px rgba(94,120,32,.4); }
+.block.charcoal { background: var(--t-charcoal); color: var(--t-charcoal-ink); box-shadow: inset 0 0 0 1px rgba(61,58,51,.3); }
+.blockName { word-break: break-word; }
+.blockHrs { font-size: 11px; opacity: .7; font-variant-numeric: tabular-nums; }
+
+/* 里程碑(同甘特視圖:2px 虛線 + 標籤),overlay 在 7 欄區域上 */
+.milestone {
+  position: absolute; top: 0; bottom: 0;
+  width: 0; border-left: 2px dashed;
+  z-index: 3; pointer-events: none; opacity: .6;
+}
+.milestone.lavender { border-color: var(--t-lavender-ink); color: var(--t-lavender-ink); }
+.milestone.lime     { border-color: var(--t-lime-ink);     color: var(--t-lime-ink); }
+.milestone.peach    { border-color: var(--t-peach-ink);    color: var(--t-peach-ink); }
+.milestone.rose     { border-color: var(--t-rose-ink);     color: var(--t-rose-ink); }
+.milestone.sky      { border-color: var(--t-sky-ink);      color: var(--t-sky-ink); }
+.milestone.olive    { border-color: var(--t-olive-ink);    color: var(--t-olive-ink); }
+.milestone.charcoal { border-color: var(--t-charcoal-ink); color: var(--t-charcoal-ink); }
+.milestoneLabel {
+  position: absolute; top: 4px;
+  left: 0; transform: translateX(-50%);
+  font-size: 10px; line-height: 1.3; font-weight: 600;
+  text-align: center; white-space: nowrap;
+  color: inherit; pointer-events: none;
+  background: var(--bg); padding: 1px 4px; border-radius: 3px;
+}
+
+/* tooltip(與甘特視圖同配方) */
+.tooltip {
+  position: fixed; z-index: 100;
+  transform: translate(-50%, -100%) translateY(-8px);
+  background: var(--ink); color: white;
+  padding: 8px 12px; border-radius: 8px;
+  font-size: 12px; line-height: 1.5;
+  display: flex; flex-direction: column; gap: 1px;
+  white-space: nowrap; pointer-events: none;
+  animation: tipIn .12s ease-out;
+  box-shadow: 0 4px 12px rgba(0,0,0,.25);
+}
+.tooltip strong { font-weight: 600; font-size: 13px; }
+.tooltip span { opacity: .75; }
+
+/* footer */
+.footer {
+  padding: 12px 18px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-top: 1px solid var(--border);
+  background: var(--surface-soft);
+  font-size: 12px; color: var(--ink-3);
+}
+.footerLeft { display: flex; align-items: center; gap: 16px; }
+.infoIcon { font-size: 13px; vertical-align: -2px; margin-right: 4px; }
+
+@keyframes tipIn { from { opacity: 0; transform: translate(-50%,-100%) translateY(4px); } to { opacity: 1; transform: translate(-50%,-100%) translateY(0); } }
