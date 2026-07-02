@@ -167,7 +167,7 @@ function ProjectDetail({ p, onUpdate, miles, dirty, onSave, onArchive, onCancel,
     const b = BT.find((x) => x.id === t.id);
     if (!b) return;
     if (!gr[b.p]) gr[b.p] = [];
-    gr[b.p].push({ ...b, enabled: t.enabled });
+    gr[b.p].push({ ...b, enabled: t.enabled, outsourced: !!t.outsourced });
   });
 
   const tog = (id) => onUpdate({
@@ -175,10 +175,19 @@ function ProjectDetail({ p, onUpdate, miles, dirty, onSave, onArchive, onCancel,
     tasks: p.tasks.map((t) => t.id === id ? { ...t, enabled: !t.enabled } : t),
   });
 
+  // PM 模式才可標為外包:排程會把任務展開成父任務(0h)+ 審核子任務(0.5h)
+  const togOutsource = (id) => onUpdate({
+    ...p,
+    tasks: p.tasks.map((t) => t.id === id ? { ...t, outsourced: !t.outsourced } : t),
+  });
+
   const totalHours = p.tasks.reduce((s, t) => {
     if (!t.enabled) return s;
     const b = BT.find((x) => x.id === t.id);
-    return s + (p.template === "pm" ? (b?.pm || 0) : (b?.h || 0));
+    if (!b) return s;
+    // 外包任務內部只留 0.5h 審核工時,其餘外包不計入總工時
+    if (t.outsourced) return s + 0.5;
+    return s + (b.h || 0);
   }, 0);
 
   const u = (field) => (value) => onUpdate({ ...p, [field]: value });
@@ -309,21 +318,41 @@ function ProjectDetail({ p, onUpdate, miles, dirty, onSave, onArchive, onCancel,
               {open && (
                 <div className="phase-body">
                   {ts.map((t) => (
-                    <label key={t.id} className={`phase-row ${!t.enabled ? "disabled" : ""}`}>
-                      <input type="checkbox" checked={t.enabled} disabled={!canEdit} onChange={() => tog(t.id)} />
-                      <span className="pid">{t.id}</span>
-                      <span className="pname">{t.n}</span>
-                      <span className="pmeta">
-                        {(p.template === "pm" ? t.pm : t.h) > 0 ? `${p.template === "pm" ? t.pm : t.h}h` : ""}
-                        {t.w > 0 ? ` +${t.w}d` : ""}
-                      </span>
-                      {t.dl && (
-                        <span className={`ptag ${t.dl}`}>{t.dl === "sv" ? "問卷前" : "開賣前"}</span>
+                    <div key={t.id}>
+                      <label className={`phase-row ${!t.enabled ? "disabled" : ""}`}>
+                        <input type="checkbox" checked={t.enabled} disabled={!canEdit} onChange={() => tog(t.id)} />
+                        {p.template === "pm" && (
+                          <input
+                            type="checkbox"
+                            className={styles.outsourceRadio}
+                            checked={t.outsourced}
+                            disabled={!canEdit || !t.enabled}
+                            onChange={() => togOutsource(t.id)}
+                            style={{ "--rc": phMeta.c }}
+                          />
+                        )}
+                        <span className="pid">{t.id}</span>
+                        <span className="pname">{t.n}</span>
+                        <span className="pmeta">
+                          {t.h > 0 ? `${t.h}h` : ""}
+                          {t.w > 0 ? ` +${t.w}d` : ""}
+                        </span>
+                        {t.dl && (
+                          <span className={`ptag ${t.dl}`}>{t.dl === "sv" ? "問卷前" : "開賣前"}</span>
+                        )}
+                        {t.ns && (
+                          <span className="ptag ns">優先</span>
+                        )}
+                      </label>
+                      {t.outsourced && t.enabled && (
+                        <div className={`phase-row ${styles.reviewTask}`}>
+                          {p.template === "pm" && <span className={styles.outsourceRadioSpacer} />}
+                          <span className="pid">{t.id}.1</span>
+                          <span className="pname">(審核){t.n}</span>
+                          <span className="pmeta">0.5h{t.w > 0 ? ` +${t.w}d` : ""}</span>
+                        </div>
                       )}
-                      {t.ns && (
-                        <span className="ptag ns">優先</span>
-                      )}
-                    </label>
+                    </div>
                   ))}
                 </div>
               )}

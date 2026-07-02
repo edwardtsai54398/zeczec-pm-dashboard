@@ -1,5 +1,5 @@
-/* ProjectPage:專案詳情頁的頂部標題列。scope 了「色點 + 名稱 + 模板切換 + 儲存/封存」
-   這排版面 —— 模板切換鈕緊貼名稱右側,儲存/封存靠最右(儲存在封存左邊)。 */
+/* ProjectPage:專案詳情頁。scope 了「色點 + 名稱 + 模板切換 + 儲存/封存」這排標題列
+   (模板切換鈕緊貼名稱右側,儲存/封存靠最右),以及任務清單的外包控制(僅此頁用到)。 */
 
 .header {
   display: flex;
@@ -62,4 +62,36 @@
   color: #b4453c;
   font-size: 12px;
   margin: -6px 0 12px;
+}
+
+/* 外包控制:PM 模式任務列的外包勾選框(圓形,勾選色由 --rc 執行期帶入)、
+   對齊審核子列用的佔位,以及外包展開後的「(審核)」子列 —— 疊在全域 .phase-row
+   上,靠 module 在後蓋掉它的 gap/padding(與 .toggle 蓋 .tpl-toggle 同套路)。 */
+.outsourceRadio {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--ink-3);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.outsourceRadio:checked {
+  background: var(--rc, var(--ink));
+  border-color: var(--rc, var(--ink));
+  box-shadow: inset 0 0 0 3px white;
+}
+.outsourceRadio:disabled { opacity: .3; cursor: default; }
+
+.outsourceRadioSpacer { display: inline-block; width: 14px; flex-shrink: 0; }
+
+.reviewTask {
+  padding-left: 24px;
+  color: var(--ink-3);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
 }

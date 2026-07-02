@@ -48,9 +48,13 @@ export function runScheduleV2(projects, settings) {
     if (!rawStart) continue;
 
     const projStart = nextWorkDay(rawStart, blackouts);
-    const isPM = proj.template === 'pm';
     const projTaskMap = Object.fromEntries((proj.tasks || []).map((t) => [t.id, t]));
     const enabledIds = new Set((proj.tasks || []).filter((t) => t.enabled).map((t) => t.id));
+
+    const outsourcedIds = new Set(
+      (proj.tasks || []).filter((t) => t.outsourced && t.enabled).map((t) => t.id)
+    );
+    for (const id of outsourcedIds) enabledIds.add(id + ".1");
 
     const svStart = parseDate(proj.surveyStart);
     const svEnd   = parseDate(proj.surveyEnd);
@@ -58,7 +62,7 @@ export function runScheduleV2(projects, settings) {
     const cpEnd   = parseDate(proj.campaignEnd);
     const refDates = { svS: svStart, svE: svEnd, cpS: cpStart, cpE: cpEnd };
 
-    const queue = BT
+    let queue = BT
       .filter((t) => enabledIds.has(t.id))
       .map((t) => {
         const pt = projTaskMap[t.id] || {};
@@ -67,7 +71,7 @@ export function runScheduleV2(projects, settings) {
           id:         t.id,
           pid:        proj.id,
           pn:         proj.name,
-          hours:      pt.pinnedHours != null ? pt.pinnedHours : (isPM ? t.pm : t.h),
+          hours:      pt.pinnedHours != null ? pt.pinnedHours : t.h,
           w:          pt.pinnedWait  != null ? pt.pinnedWait  : (t.w || 0),
           dl:          t.dl,
           ns:          t.ns || false,
@@ -81,6 +85,38 @@ export function runScheduleV2(projects, settings) {
           pinnedStart: pt.pinnedStart ? parseDate(pt.pinnedStart) : null,
         };
       });
+
+    if (outsourcedIds.size > 0) {
+      const expanded = [];
+      for (const entry of queue) {
+        if (outsourcedIds.has(entry.id)) {
+          const remappedD = (entry.d || []).map((depId) =>
+            outsourcedIds.has(depId) ? depId + ".1" : depId
+          );
+          expanded.push({ ...entry, hours: 0, w: Math.ceil(entry.hours / 8), d: remappedD });
+          expanded.push({
+            _task:       { ...entry._task, n: `(審核)${entry._task.n}` },
+            id:          entry.id + ".1",
+            pid:         entry.pid,
+            pn:          entry.pn,
+            hours:       0.5,
+            w:           entry.w,
+            dl:          entry.dl,
+            ns:          entry.ns,
+            d:           [entry.id],
+            hardDeadline: entry.hardDeadline,
+            pinnedDate:  null,
+            pinnedStart: null,
+          });
+        } else {
+          const newD = (entry.d || []).map((depId) =>
+            outsourcedIds.has(depId) ? depId + ".1" : depId
+          );
+          expanded.push({ ...entry, d: newD });
+        }
+      }
+      queue = expanded;
+    }
 
     projStates.push({
       proj,
@@ -397,6 +433,7 @@ function taskCanStart(entry, doneMap, projStart, enabledIds, blackouts, svStart,
 function makeRecord(entry, start, end, waitEnd) {
   return {
     ...entry._task,
+    id:      entry.id,
     hours:   entry.hours,
     w:       entry.w,
     start,
