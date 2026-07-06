@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { addD } from '../../../../lib/dateUtils.js';
+import { assignLanes, orderedPhaseKeys } from '../utils.js';
 import pageStyles from '../Gantt.module.css';
 import styles from '../GanttView/GanttView.module.css';
 import calStyles from '../CalendarWeek/CalendarWeek.module.css';
@@ -8,8 +9,10 @@ import calStyles from '../CalendarWeek/CalendarWeek.module.css';
 // Gantt 自己從 context 取 projects/排程/設定/釘選儲存(比照 Dashboard 測試),
 // 測試把 WorkspaceContext 換成可控假實作,每次 renderGantt 注入該情境的資料。
 const mockWorkspace = vi.hoisted(() => ({ projects: [], sch: {}, settings: {}, applyTaskDateChange: () => {} }));
-// role 可由各測試切換:owner/editor 能訂選日期,viewer 的 double click 應無效。
-const mockAuth = vi.hoisted(() => ({ role: 'owner' }));
+// role 可由各測試切換:owner/editor 能訂選日期,viewer 的 double click 應無效。workspaceId 供成員 hook 用。
+const mockAuth = vi.hoisted(() => ({ role: 'owner', workspaceId: 'W1' }));
+// Phase→成員 排版需要成員清單;mock 成可控值(避免打真 Supabase RPC),每次 renderGantt 注入。
+const mockMembers = vi.hoisted(() => ({ value: [] }));
 
 vi.mock('../../../../context/WorkspaceContext.jsx', () => ({
   useWorkspace: () => mockWorkspace,
@@ -17,6 +20,10 @@ vi.mock('../../../../context/WorkspaceContext.jsx', () => ({
 
 vi.mock('../../../../context/AuthContext.jsx', () => ({
   useAuthContext: () => mockAuth,
+}));
+
+vi.mock('../../../../hooks/useWorkspaceMembers.js', () => ({
+  useWorkspaceMembers: () => ({ members: mockMembers.value, loading: false, error: '', refetch: () => {} }),
 }));
 
 import Gantt from '../index.jsx';
@@ -31,11 +38,12 @@ const calDot = (...keys) => '.' + keys.map((key) => calStyles[key]).join('.');
 // 設定 mock workspace 後渲染 Gantt(Gantt 不再吃 props,改吃 context)。
 // 頁面預設是行事曆模式;多數測試針對甘特視圖,故預設先點「甘特圖模式」切過去,
 // 行事曆相關測試傳 view: 'calendar' 留在預設視圖。
-function renderGantt({ projects = [], data = {}, settings = {}, applyTaskDateChange = () => {}, view = 'gantt' } = {}) {
+function renderGantt({ projects = [], data = {}, settings = {}, applyTaskDateChange = () => {}, members = [], view = 'gantt' } = {}) {
   mockWorkspace.projects = projects;
   mockWorkspace.sch = data;
   mockWorkspace.settings = settings;
   mockWorkspace.applyTaskDateChange = applyTaskDateChange;
+  mockMembers.value = members;
   const result = render(<Gantt />);
   if (view === 'gantt') {
     // 空資料時只渲染 empty state,沒有切換鈕
@@ -51,8 +59,8 @@ function makeProject(id, name, opts = {}) {
   return { id, name, tone: opts.tone || 'lavender', ...opts };
 }
 
-function makeTask(id, name, start, end, hours = 8) {
-  return { id, n: name, start, end, hours };
+function makeTask(id, name, start, end, hours = 8, p = '2') {
+  return { id, n: name, start, end, hours, p };
 }
 
 function monday(d) {
@@ -331,32 +339,50 @@ describe('日期格 header 渲染', () => {
 });
 
 // ============================================================
-// 5. 甘特圖 bar 顯示正確 (normal mode)
+// 5. 甘特圖 Phase→成員 列顯示 (normal mode)
 // ============================================================
 
-describe('甘特圖 bar 顯示 (normal mode)', () => {
-  const projects = [makeProject('P1', '專案A', { tone: 'lime' })];
+describe('甘特圖 Phase→成員 列顯示 (normal mode)', () => {
+  const members = [
+    { user_id: 'U1', display_name: 'Alice', role: 'owner' },
+    { user_id: 'U2', display_name: 'Bob', role: 'editor' },
+  ];
+  // 兩個任務都指派給 Bob(U2);owner U1 存檔時不寫 assignee,這裡明確指派故不落未指派。
+  const projects = [makeProject('P1', '專案A', {
+    tone: 'lime',
+    tasks: [
+      { id: 'T1', enabled: true, assignee: 'U2' },
+      { id: 'T2', enabled: true, assignee: 'U2' },
+    ],
+  })];
   const data = {
     P1: {
-      T1: makeTask('T1', '設計稿', '2026-05-11', '2026-05-15', 8),
-      T2: makeTask('T2', '開發', '2026-05-18', '2026-05-22', 16),
+      T1: makeTask('T1', '設計稿', '2026-05-11', '2026-05-15', 8, '2'),
+      T2: makeTask('T2', '開發', '2026-05-18', '2026-05-22', 16, '2'),
     },
   };
 
-  it('每個有 start/end 的任務都渲染一個 task-row', () => {
-    const { container } = renderGantt({ projects, data });
-    const taskRows = container.querySelectorAll(dot('taskRow'));
-    expect(taskRows.length).toBe(2);
+  it('相位合併格顯示相位名稱 (PH 的 n)', () => {
+    const { container } = renderGantt({ projects, data, members });
+    const phaseLabel = container.querySelector(dot('phaseLabel'));
+    expect(phaseLabel.textContent).toContain('問卷階段'); // PH['2'].n
+  });
+
+  it('該相位依成員數展開成員列(全指派時無未指派列)', () => {
+    const { container } = renderGantt({ projects, data, members });
+    const rows = container.querySelectorAll(dot('memberRow'));
+    expect(rows.length).toBe(2); // Alice + Bob
+    expect(container.querySelector(dot('memberRow', 'unassigned'))).toBeFalsy();
   });
 
   it('bar 帶有正確的 tone class', () => {
-    const { container } = renderGantt({ projects, data });
+    const { container } = renderGantt({ projects, data, members });
     const bars = container.querySelectorAll(dot('bar', 'lime'));
     expect(bars.length).toBeGreaterThan(0);
   });
 
   it('bar 的第一個 segment 顯示任務名稱', () => {
-    const { container } = renderGantt({ projects, data });
+    const { container } = renderGantt({ projects, data, members });
     const barNames = container.querySelectorAll(dot('barName'));
     const names = [...barNames].map(el => el.textContent);
     expect(names).toContain('設計稿');
@@ -364,33 +390,53 @@ describe('甘特圖 bar 顯示 (normal mode)', () => {
   });
 
   it('bar 的第一個 segment 顯示工時 (hours > 0)', () => {
-    const { container } = renderGantt({ projects, data });
+    const { container } = renderGantt({ projects, data, members });
     const hrs = container.querySelectorAll(dot('barHrs'));
     expect([...hrs].some(el => el.textContent === '8h')).toBe(true);
   });
 
   it('hours=0 的任務 bar 有 placeholder class', () => {
-    const phData = { P1: { T1: makeTask('T1', '待估', '2026-05-11', '2026-05-13', 0) } };
-    const { container } = renderGantt({ projects, data: phData });
+    const phProjects = [makeProject('P1', '專案A', { tone: 'lime', tasks: [{ id: 'T1', enabled: true, assignee: 'U2' }] })];
+    const phData = { P1: { T1: makeTask('T1', '待估', '2026-05-11', '2026-05-13', 0, '2') } };
+    const { container } = renderGantt({ projects: phProjects, data: phData, members });
     const bar = container.querySelector(dot('bar', 'placeholder'));
     expect(bar).toBeTruthy();
   });
 
   it('跨週末任務的第二段 bar 顯示「續」', () => {
     // Task spans Mon-Tue next week (crosses weekend)
-    const crossData = {
-      P1: { T1: makeTask('T1', '跨週', '2026-05-11', '2026-05-19', 12) },
-    };
-    const { container } = renderGantt({ projects, data: crossData });
+    const crossProjects = [makeProject('P1', '專案A', { tone: 'lime', tasks: [{ id: 'T1', enabled: true, assignee: 'U2' }] })];
+    const crossData = { P1: { T1: makeTask('T1', '跨週', '2026-05-11', '2026-05-19', 12, '2') } };
+    const { container } = renderGantt({ projects: crossProjects, data: crossData, members });
     const barNames = container.querySelectorAll(dot('barName'));
     const texts = [...barNames].map(el => el.textContent);
     expect(texts).toContain('續');
   });
 
-  it('專案 banner 顯示在該專案任務之前', () => {
-    const { container } = renderGantt({ projects, data });
+  it('專案 banner 顯示在該專案之前', () => {
+    const { container } = renderGantt({ projects, data, members });
     const banner = container.querySelector(dot('projBanner'));
     expect(banner.textContent).toContain('專案A');
+  });
+
+  it('沒有 assignee 的任務歸到 owner 列(未指派讀作 owner),不另立未指派列', () => {
+    const unProjects = [makeProject('P1', '專案A', { tone: 'lime', tasks: [{ id: 'T1', enabled: true }] })];
+    const unData = { P1: { T1: makeTask('T1', '沒人做', '2026-05-11', '2026-05-15', 8, '2') } };
+    const { container } = renderGantt({ projects: unProjects, data: unData, members });
+    // 有 owner(Alice)時不出未指派列;預設任務收進 owner 那一列
+    expect(container.querySelector(dot('memberRow', 'unassigned'))).toBeFalsy();
+    expect(container.querySelector(dot('barName')).textContent).toContain('沒人做');
+    const names = [...container.querySelectorAll(dot('memberName'))].map(el => el.textContent);
+    expect(names.some(text => text.includes('Alice'))).toBe(true);
+  });
+
+  it('owner 尚未載入(成員清單為空)時,任務暫掛「未指派」列', () => {
+    const unProjects = [makeProject('P1', '專案A', { tone: 'lime', tasks: [{ id: 'T1', enabled: true }] })];
+    const unData = { P1: { T1: makeTask('T1', '沒人做', '2026-05-11', '2026-05-15', 8, '2') } };
+    const { container } = renderGantt({ projects: unProjects, data: unData, members: [] });
+    const unassignedRow = container.querySelector(dot('memberRow', 'unassigned'));
+    expect(unassignedRow).toBeTruthy();
+    expect(unassignedRow.querySelector(dot('barName')).textContent).toContain('沒人做');
   });
 });
 
@@ -398,33 +444,37 @@ describe('甘特圖 bar 顯示 (normal mode)', () => {
 // 6. 疊圖模式 (overlayMode)
 // ============================================================
 
-describe('疊圖模式 (overlayMode)', () => {
+describe('疊圖模式 (overlayMode) — 合併專案的 Phase→成員', () => {
+  const members = [
+    { user_id: 'U1', display_name: 'Alice', role: 'owner' },
+    { user_id: 'U2', display_name: 'Bob', role: 'editor' },
+  ];
+  // 兩專案的同名任務都指派給 Bob;疊圖模式應合併到同一相位的同一成員列。
   const projects = [
-    makeProject('P1', '專案A', { tone: 'lime' }),
-    makeProject('P2', '專案B', { tone: 'peach' }),
+    makeProject('P1', '專案A', { tone: 'lime', tasks: [{ id: 'T1', enabled: true, assignee: 'U2' }] }),
+    makeProject('P2', '專案B', { tone: 'peach', tasks: [{ id: 'T1', enabled: true, assignee: 'U2' }] }),
   ];
   const data = {
-    P1: { T1: makeTask('T1', '共同任務', '2026-05-11', '2026-05-15', 8) },
-    P2: { T1: makeTask('T1', '共同任務', '2026-05-12', '2026-05-16', 10) },
+    P1: { T1: makeTask('T1', '共同任務', '2026-05-11', '2026-05-15', 8, '2') },
+    P2: { T1: makeTask('T1', '共同任務', '2026-05-12', '2026-05-16', 10, '2') },
   };
 
   it('點擊疊圖模式按鈕後切換為 overlay layout', () => {
-    const { container } = renderGantt({ projects, data });
+    const { container } = renderGantt({ projects, data, members });
     const overlayBtn = screen.getByText('疊圖模式');
     fireEvent.click(overlayBtn);
     expect(container.querySelector(dot('trackBody', 'overlay'))).toBeTruthy();
   });
 
-  it('疊圖模式下，相同 taskId 的任務合併為同一 row', () => {
-    const { container } = renderGantt({ projects, data });
+  it('疊圖模式合併專案:無專案 banner,同相位只出一個相位合併格', () => {
+    const { container } = renderGantt({ projects, data, members });
     fireEvent.click(screen.getByText('疊圖模式'));
-    // T1 from both projects should be in one row
-    const taskRows = container.querySelectorAll(dot('taskRow'));
-    expect(taskRows.length).toBe(1);
+    expect(container.querySelector(dot('projBanner'))).toBeFalsy();
+    expect(container.querySelectorAll(dot('phaseLabel')).length).toBe(1);
   });
 
-  it('疊圖模式下，同一 row 有多個不同 tone 的 bar', () => {
-    const { container } = renderGantt({ projects, data });
+  it('疊圖模式下，同一成員列有多個不同 tone 的 bar(跨專案)', () => {
+    const { container } = renderGantt({ projects, data, members });
     fireEvent.click(screen.getByText('疊圖模式'));
     const mintBars = container.querySelectorAll(dot('bar', 'lime'));
     const peachBars = container.querySelectorAll(dot('bar', 'peach'));
@@ -432,22 +482,82 @@ describe('疊圖模式 (overlayMode)', () => {
     expect(peachBars.length).toBeGreaterThan(0);
   });
 
-
-  it('疊圖模式左側顯示 proj-dots 標記', () => {
-    const { container } = renderGantt({ projects, data });
-    fireEvent.click(screen.getByText('疊圖模式'));
-    const dots = container.querySelectorAll(dot('projDots') + ' ' + dot('pd'));
-    expect(dots.length).toBe(2);
-  });
-
-
   it('再次點擊疊圖模式按鈕可恢復普通模式', () => {
-    const { container } = renderGantt({ projects, data });
+    const { container } = renderGantt({ projects, data, members });
     const btn = screen.getByText('疊圖模式');
     fireEvent.click(btn);
     expect(container.querySelector(dot('trackBody', 'overlay'))).toBeTruthy();
     fireEvent.click(btn);
     expect(container.querySelector(dot('trackBody', 'overlay'))).toBeFalsy();
+  });
+});
+
+// ============================================================
+// 6b. assignLanes / orderedPhaseKeys 純函式
+// ============================================================
+
+describe('assignLanes: 貪婪 lane 指派', () => {
+  const D = (s) => new Date(s);
+
+  it('非重疊任務全放 lane 0,laneCount 1', () => {
+    const items = [
+      { start: D('2026-05-11'), end: D('2026-05-12') },
+      { start: D('2026-05-13'), end: D('2026-05-14') },
+    ];
+    expect(assignLanes(items)).toBe(1);
+    expect(items.map(i => i.lane)).toEqual([0, 0]);
+  });
+
+  it('兩個時間重疊 → lane 0 / 1,count 2', () => {
+    const items = [
+      { start: D('2026-05-11'), end: D('2026-05-15') },
+      { start: D('2026-05-12'), end: D('2026-05-16') },
+    ];
+    expect(assignLanes(items)).toBe(2);
+    expect(items.map(i => i.lane).sort()).toEqual([0, 1]);
+  });
+
+  it('三個互相重疊 → count 3', () => {
+    const items = [
+      { start: D('2026-05-11'), end: D('2026-05-20') },
+      { start: D('2026-05-12'), end: D('2026-05-20') },
+      { start: D('2026-05-13'), end: D('2026-05-20') },
+    ];
+    expect(assignLanes(items)).toBe(3);
+  });
+
+  it('起訖落在同一天(a.end === b.start)代表共用該日欄 → 分不同 lane', () => {
+    // 甘特條以整日欄 inclusive 繪製,兩條都畫到 5/13 那欄會重疊,故各佔一條 lane
+    const items = [
+      { start: D('2026-05-11'), end: D('2026-05-13') },
+      { start: D('2026-05-13'), end: D('2026-05-15') },
+    ];
+    expect(assignLanes(items)).toBe(2);
+    expect(items.map(i => i.lane).sort()).toEqual([0, 1]);
+  });
+
+  it('隔一天(a.end 早於 b.start 一天以上)可共用同一 lane', () => {
+    // 5/12 結束、5/13 才開始 → 不共用同一欄,可疊回 lane 0
+    const items = [
+      { start: D('2026-05-11'), end: D('2026-05-12') },
+      { start: D('2026-05-13'), end: D('2026-05-14') },
+    ];
+    expect(assignLanes(items)).toBe(1);
+    expect(items.map(i => i.lane)).toEqual([0, 0]);
+  });
+
+  it('空輸入 → count 0', () => {
+    expect(assignLanes([])).toBe(0);
+  });
+});
+
+describe('orderedPhaseKeys: 相位排序', () => {
+  it('依 PHASE_ORDER 排序(數字鍵不會被 JS 重排到字母鍵前)', () => {
+    expect(orderedPhaseKeys(['3', '1B', '2'])).toEqual(['1B', '2', '3']);
+  });
+
+  it('不在表內的未知鍵排到最後', () => {
+    expect(orderedPhaseKeys(['2', 'ZZ', '1A'])).toEqual(['1A', '2', 'ZZ']);
   });
 });
 

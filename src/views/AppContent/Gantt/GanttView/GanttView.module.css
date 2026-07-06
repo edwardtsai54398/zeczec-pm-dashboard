@@ -1,5 +1,6 @@
 /* GanttView(index.jsx)的 scoped 樣式:工具列、甘特格線與日期軸、
-   專案/任務列與甘特條(疊圖、等待段、里程碑、今天線)、tooltip 與頁尾。
+   專案 banner / 相位 banner / 成員列(列高隨 lane 數撐開,內部任務塊疊 lane)與甘特條
+   (等待段、里程碑、今天線、+N 溢出標)、tooltip 與頁尾。
    tone 修飾 class(lavender…charcoal)與狀態 class(weekend/today…)皆 scoped,
    JSX 以 styles[toneKey] 套用;圖示字型 .ti 等全域 class 以樣板字串串接。 */
 
@@ -109,26 +110,49 @@
 .projBanner.olive    { background: linear-gradient(90deg, var(--t-olive)    0%, rgba(210,223,164,.3) 100%); color: var(--t-olive-ink); }
 .projBanner.charcoal { background: linear-gradient(90deg, var(--t-charcoal) 0%, rgba(226,223,216,.3) 100%); color: var(--t-charcoal-ink); }
 .bannerDot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-.collapse { margin-left: auto; font-size: 14px; opacity: .55; }
-.taskName {
-  height: 40px; padding: 0 14px 0 18px;
+
+/* 相位群組(左欄):相位名做「跨列合併」的直向格(佔滿該相位所有成員列高)+ 右邊一疊成員名 */
+/* 相位之間用較深、較粗的線分隔,讓每個階段列的上下界線更明顯(相鄰相位共用這條線) */
+.phaseGroup { display: flex; align-items: stretch; border-bottom: 2px solid var(--border-strong); }
+.phaseLabel {
+  width: 72px; flex-shrink: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px;
+  padding: 8px 6px; text-align: center;
+  border-right: 1px solid var(--border);
+  border-left: 3px solid var(--phase-c, var(--border));
+  background: var(--surface-soft);
+}
+.phaseText {
+  font-size: 12px; font-weight: 600; color: var(--ink-2);
+  line-height: 1.3; word-break: break-word;
+}
+.phaseDot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.phaseMembers { flex: 1; min-width: 0; }
+/* 群組最後一列的淺色底線交給 .phaseGroup 的深色邊框,避免疊成雙線 */
+.phaseGroup .phaseMembers > .memberName:last-child { border-bottom: none; }
+
+/* 成員列(左欄):頭像首字 + 名稱 + 任務數;未指派列灰化 */
+.memberName {
+  padding: 0 12px;
   display: flex; align-items: center; gap: 8px;
   font-size: 13px; color: var(--ink);
   border-bottom: 1px solid var(--border);
   white-space: nowrap; overflow: hidden;
 }
-.pid { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; min-width: 32px; }
+.memberName.unassigned { color: var(--ink-3); }
+.memberAvatar {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--surface-tint); color: var(--ink-2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600; flex-shrink: 0;
+}
+.memberName.unassigned .memberAvatar { background: transparent; box-shadow: inset 0 0 0 1px var(--border); }
 .name { flex: 1; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
-.projDots { display: inline-flex; align-items: center; gap: 3px; }
-.pd { width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 0 1.5px white; }
-.pd.lavender { background: var(--t-lavender-ink); }
-.pd.lime     { background: var(--t-lime-ink); }
-.pd.peach    { background: var(--t-peach-ink); }
-.pd.rose     { background: var(--t-rose-ink); }
-.pd.sky      { background: var(--t-sky-ink); }
-.pd.olive    { background: var(--t-olive-ink); }
-.pd.charcoal { background: var(--t-charcoal-ink); }
-.hrs { font-size: 10px; color: var(--ink-3); font-variant-numeric: tabular-nums; min-width: 22px; text-align: right; }
+.memberCount {
+  font-size: 10px; color: var(--ink-3);
+  font-variant-numeric: tabular-nums; min-width: 18px; text-align: right; flex-shrink: 0;
+}
 
 /* track */
 .track { position: relative; }
@@ -200,8 +224,8 @@
 
 /* track body */
 .trackBody { position: relative; }
-/* 裝飾貓:放在甘特條空白格,位置由 JS 算好的 left/top 決定;在條上方但不擋互動 */
-.trackBody .cat { position: absolute; z-index: 3; }
+/* 疊圖模式:合併多專案到同一 Phase→成員(任務塊仍實心,以專案色調區分)。保留此 class 供切換與測試判斷。 */
+.trackBody.overlay { position: relative; }
 .todayLine {
   position: absolute; top: 0; bottom: 0;
   width: 1.5px; background: var(--t-peach-ink);
@@ -218,10 +242,17 @@
 .projRow.sky      { background: rgba(187,221,234,.16); }
 .projRow.olive    { background: rgba(210,223,164,.16); }
 .projRow.charcoal { background: rgba(226,223,216,.16); }
-.taskRow {
-  height: 40px; display: flex;
+/* 成員軌道(右)——列高由 lane 數撐開(inline height),任務塊以 inline top/height 疊 lane(相位名在左欄合併格,右軌不放間隔列) */
+.memberRow {
+  display: flex;
   border-bottom: 1px solid var(--border); position: relative;
 }
+.memberRow.unassigned {
+  background: repeating-linear-gradient(45deg, rgba(22,22,19,.02) 0 6px, transparent 6px 12px);
+}
+/* 右軌相位群組:比照左欄,底部用較深較粗的線分隔相位;最後一列的淺色底線清掉避免雙線 */
+.phaseTrack { border-bottom: 2px solid var(--border-strong); }
+.phaseTrack > .memberRow:last-child { border-bottom: none; }
 .gridCell { flex-shrink: 0; border-right: 1px solid var(--border); }
 .gridCell.weekend {
   background: repeating-linear-gradient(45deg, rgba(22,22,19,.025) 0 6px, transparent 6px 12px);
@@ -250,27 +281,8 @@
 .bar.olive    { background: var(--t-olive);    color: var(--t-olive-ink);    box-shadow: inset 0 0 0 1px rgba(94,120,32,.4); }
 .bar.charcoal { background: var(--t-charcoal); color: var(--t-charcoal-ink); box-shadow: inset 0 0 0 1px rgba(61,58,51,.3); }
 
-/* bars — overlay mode: semi-transparent + multiply */
-.overlay .bar { mix-blend-mode: multiply; font-weight: 600; }
-/* split bars (2+ projects in same row): solid, no blend, no text */
-.overlay .bar.split { mix-blend-mode: normal; opacity: .92; border-radius: 4px; }
-.overlay .bar.lavender { background: rgba(221,218,244,.78); box-shadow: inset 0 0 0 1.5px #8B85D6; }
-.overlay .bar.lime     { background: rgba(227,237,161,.72); box-shadow: inset 0 0 0 1.5px #B8C95C; }
-.overlay .bar.peach    { background: rgba(245,210,181,.72); box-shadow: inset 0 0 0 1.5px #E29A6A; }
-.overlay .bar.rose     { background: rgba(245,201,214,.72); box-shadow: inset 0 0 0 1.5px #D47A9A; }
-.overlay .bar.sky      { background: rgba(187,221,234,.72); box-shadow: inset 0 0 0 1.5px #72B4CC; }
-
-/* bar-dot: hidden in normal, shown in overlay */
-.barDot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; display: none; }
-.bar.lavender .barDot { background: var(--t-lavender-ink); }
-.bar.lime     .barDot { background: var(--t-lime-ink); }
-.bar.peach    .barDot { background: var(--t-peach-ink); }
-.bar.rose     .barDot { background: var(--t-rose-ink); }
-.bar.sky      .barDot { background: var(--t-sky-ink); }
-.overlay .barDot { display: block; }
 .barName { overflow: hidden; text-overflow: ellipsis; }
 .barHrs { font-size: 10px; opacity: .7; font-variant-numeric: tabular-nums; margin-left: auto; padding-left: 6px; }
-.overlay .barHrs { display: none; }
 
 /* wait bars (client review period after task) */
 .barWait {

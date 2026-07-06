@@ -1,11 +1,12 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { dBt, addD, fmt, pD } from '../../../../lib/dateUtils.js';
-import RandomCat from '../../../../components/CatSvg/RandomCat.jsx';
-import { readPreference } from '../../../../lib/preference.js';
+import { PH } from '../../../../lib/tasks.js';
 import { useWorkspace } from '../../../../context/WorkspaceContext.jsx';
+import { useAuthContext } from '../../../../context/AuthContext.jsx';
+import { useWorkspaceMembers } from '../../../../hooks/useWorkspaceMembers.js';
 import { usePermissions } from '../../../../hooks/usePermissions.js';
 import TaskEditModal from '../TaskEditModal/index.jsx';
-import { toneKey, buildPeriodBars } from '../utils.js';
+import { toneKey, buildPeriodBars, assignLanes, orderedPhaseKeys } from '../utils.js';
 import styles from './GanttView.module.css';
 
 const WEEKEND_BAR_TASKS = new Set(['7.3', '7.5', '7.7', '7.8', '7.10', '8.2', '8.4', '8.6', '8.8', '8.10']);
@@ -14,9 +15,23 @@ const LABEL_W = 240;
 const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const MONTH_EN = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
-// 每日欄寬與最少顯示天數(沿用原縮放「日」級距,移除縮放功能後固定為此)
-const COL_W = 52;
+// 每日欄寬(px)與最少顯示天數。COL_W 是所有水平計算的唯一來源(segment、今天線、里程碑、月份標、
+// scroll 取整都由它算),改這一個常數即可放大整張圖。
+const COL_W = 100;
 const MIN_VIEW_DAYS = 21;
+
+// 成員列版面:同格重疊的任務往下疊 lane,不設條數上限——列高改由該列的 lane 數撐開。
+// 每條 lane 高 LANE_H、彼此間距 LANE_GAP、上下各留 LANE_PAD;空列或單一 lane 至少 MIN_ROW_H。
+const LANE_H = 22;
+const LANE_GAP = 4;
+const LANE_PAD = 4;
+const MIN_ROW_H = 30;
+
+// 依 lane 數算某成員列的總高——左欄成員名與右軌甘特列都用它,兩邊同一 row 才能對齊。
+function rowHeight(laneCount) {
+  if (laneCount <= 0) return MIN_ROW_H;
+  return Math.max(MIN_ROW_H, LANE_PAD * 2 + laneCount * LANE_H + (laneCount - 1) * LANE_GAP);
+}
 
 function monday(date) {
   const result = new Date(date);
@@ -69,20 +84,51 @@ function barSegments(startDate, endDate, gridStart, allowWeekends = false) {
   return segments;
 }
 
-// 確定性亂數（mulberry32）：純函式,給貓咪佈局用,依 seed 重現,
-// 避免在 render 期間呼叫 Math.random（React Compiler 不允許）。
-function mulberry32(seed) {
-  let state = seed >>> 0;
-  return function () {
-    state = (state + 0x6d2b79f5) | 0;
-    let hash = Math.imul(state ^ (state >>> 15), 1 | state);
-    hash = (hash + Math.imul(hash ^ (hash >>> 7), 61 | hash)) ^ hash;
-    return ((hash ^ (hash >>> 14)) >>> 0) / 4294967296;
-  };
+// 一個相位內的任務依「指派對象」分桶成列:工作區每位成員一列(即使沒任務也出空列,以維持左右對齊),
+// owner 尚未載入時才在末尾補一「未指派」列。每列跑 assignLanes 得每個任務的 lane 與該列 laneCount。
+// bucket 規則:assignee 是「非 owner 的現有成員」→ 歸該成員;其餘(未指派 / 指派給 owner /
+// 指到已離開的成員)一律歸 owner——「未指派讀作 owner」,與 ProjectPage 下拉預設、排程容量算法一致。
+// (owner 存檔時不寫 assignee,故預設任務根本沒有 assignee 欄位;這裡把它們收進 owner 列而非另立未指派列。)
+function buildPhaseRows(records, members, ownerId, memberIdSet) {
+  const byBucket = new Map();
+  let hasUnassigned = false;
+  for (const entry of records) {
+    const rawAssignee = (entry.project.tasks || []).find(task => task.id === entry.record.id)?.assignee;
+    // 非 owner 的現有成員 → 該成員;其餘一律歸 owner。owner 尚未載入(null)時才暫掛未指派列。
+    const bucket = rawAssignee && rawAssignee !== ownerId && memberIdSet.has(rawAssignee) ? rawAssignee : (ownerId ?? null);
+    if (bucket === null) hasUnassigned = true;
+    const item = { ...entry, start: entry.record.start, end: entry.record.end };
+    if (!byBucket.has(bucket)) byBucket.set(bucket, []);
+    byBucket.get(bucket).push(item);
+  }
+  const rows = members.map(member => {
+    const items = byBucket.get(member.user_id) || [];
+    const laneCount = assignLanes(items);
+    return { memberId: member.user_id, memberName: member.display_name || member.email, items, laneCount };
+  });
+  if (hasUnassigned) {
+    const items = byBucket.get(null) || [];
+    const laneCount = assignLanes(items);
+    rows.push({ memberId: null, memberName: '未指派', items, laneCount });
+  }
+  return rows;
 }
 
-// 每次「整頁載入」隨機一次的 seed、
-const SESSION_CAT_SEED = (Math.random() * 4294967296) >>> 0;
+// 一批 records(每筆含 { record, project, tone })依 record.p 分相位,回傳依 PHASE_ORDER 排好的
+// [{ phaseKey, phaseMeta, rows }]。相位表 PH 沒有的鍵給灰底 fallback(比照 ProjectPage)。
+function groupByPhase(records, members, ownerId, memberIdSet) {
+  const byPhase = new Map();
+  for (const entry of records) {
+    const phaseKey = entry.record.p;
+    if (!byPhase.has(phaseKey)) byPhase.set(phaseKey, []);
+    byPhase.get(phaseKey).push(entry);
+  }
+  return orderedPhaseKeys([...byPhase.keys()]).map(phaseKey => ({
+    phaseKey,
+    phaseMeta: PH[phaseKey] || { n: phaseKey, c: '#888', tone: 'lavender' },
+    rows: buildPhaseRows(byPhase.get(phaseKey), members, ownerId, memberIdSet),
+  }));
+}
 
 export default function GanttView({ selectedProjects, onToggleMode }) {
   // 資料層直接從 context 取(比照 Dashboard / KOLPage);篩選 state 由 Gantt 容器持有。
@@ -90,10 +136,13 @@ export default function GanttView({ selectedProjects, onToggleMode }) {
   const { can } = usePermissions();
   const canEdit = can('editGantt'); // viewer 不能訂選任務日期(double click 無效)
 
-  const today = useMemo(() => { const date = new Date(); date.setHours(0, 0, 0, 0); return date; }, []);
+  // 成員清單在「用到的這層」自取(比照 Dashboard),不從上層 props 串下來。
+  const { workspaceId } = useAuthContext();
+  const { members } = useWorkspaceMembers(workspaceId);
+  const ownerId = useMemo(() => members.find(member => member.role === 'owner')?.user_id ?? null, [members]);
+  const memberIdSet = useMemo(() => new Set(members.map(member => member.user_id)), [members]);
 
-  // 貓咪偏好直接讀本地快取(localStorage)。
-  const preference = useMemo(readPreference, []);
+  const today = useMemo(() => { const date = new Date(); date.setHours(0, 0, 0, 0); return date; }, []);
 
   const dateRange = useMemo(() => {
     let earliest = null, latest = null;
@@ -236,121 +285,30 @@ export default function GanttView({ selectedProjects, onToggleMode }) {
     setPinState({ pid: project.id, taskId: task.id });
   }, [canEdit]);
 
-  const normalGroups = useMemo(() => {
+  // 一般模式:每個已選專案一區 → 區內依相位 → 每相位展開成員列。
+  const phaseGroupsNormal = useMemo(() => {
     return selectedProjects.map(project => {
-      const tasks = Object.values(data[project.id] || {})
-        .filter(task => task.start && task.end)
-        .sort((a, b) => new Date(a.start) - new Date(b.start));
-      return { project, tasks, tone: toneKey(project) };
-    }).filter(({ tasks }) => tasks.length > 0);
-  }, [selectedProjects, data]);
+      const tone = toneKey(project);
+      const records = Object.values(data[project.id] || {})
+        .filter(record => record.start && record.end)
+        .map(record => ({ record, project, tone }));
+      const phases = groupByPhase(records, members, ownerId, memberIdSet);
+      return { project, tone, phases };
+    }).filter(group => group.phases.length > 0);
+  }, [selectedProjects, data, members, ownerId, memberIdSet]);
 
-  const overlayRows = useMemo(() => {
-    const taskMap = new Map();
+  // 疊圖模式:拿掉專案分區,把所有已選專案的任務攤平後,只依相位 → 成員分組(任務塊仍以專案色調區分)。
+  const phaseGroupsOverlay = useMemo(() => {
+    const records = [];
     for (const project of selectedProjects) {
       const tone = toneKey(project);
-      for (const [taskId, task] of Object.entries(data[project.id] || {})) {
-        if (!task.start || !task.end) continue;
-        if (!taskMap.has(taskId)) taskMap.set(taskId, { id: task.id, name: task.n, bars: [] });
-        taskMap.get(taskId).bars.push({ project, task, tone });
+      for (const record of Object.values(data[project.id] || {})) {
+        if (!record.start || !record.end) continue;
+        records.push({ record, project, tone });
       }
     }
-    return [...taskMap.values()].sort((a, b) => {
-      const minStartA = Math.min(...a.bars.map(bar => new Date(bar.task.start)));
-      const minStartB = Math.min(...b.bars.map(bar => new Date(bar.task.start)));
-      return minStartA - minStartB;
-    });
-  }, [selectedProjects, data]);
-
-  // 在甘特條的空白格隨機放 5~7 隻裝飾貓。佔用表依「實際 DOM 渲染順序」逐 row 建立,
-  // 切換疊圖 / 換週 / 縮放都會重算重排。嚴格不重疊,放不下就少放。
-  // 用 seeded PRNG（mulberry32）保持 render 純淨:依 deps 重現、re-render 不亂跳。
-  const catPlacements = useMemo(() => {
-    const catEnabled = preference.catEnabled;
-    const catCount = preference.catCount;
-    if (!catEnabled) return [];
-
-    // 1. 建立佔用表:每列是 banner（整列禁放）或 { columns:Set<欄位> }
-    const rows = [];
-    const markColumns = (columns, start, end, allowWeekends = false) => {
-      barSegments(start, end, viewStart, allowWeekends).forEach(segment => {
-        for (let column = segment.columnStart; column < segment.columnStart + segment.span; column++) {
-          if (column >= 0 && column < VIEW_DAYS) columns.add(column);
-        }
-      });
-    };
-    if (overlayMode) {
-      overlayRows.forEach(({ bars }) => {
-        const columns = new Set();
-        bars.forEach(({ task }) => {
-          markColumns(columns, task.start, task.end, WEEKEND_BAR_TASKS.has(task.id));
-          if (task.waitEnd) markColumns(columns, addD(task.end, 1), task.waitEnd);
-        });
-        rows.push({ columns });
-      });
-    } else {
-      normalGroups.forEach(({ tasks }) => {
-        rows.push({ full: true }); // 專案 banner 列整列不放
-        tasks.forEach(task => {
-          const columns = new Set();
-          markColumns(columns, task.start, task.end, WEEKEND_BAR_TASKS.has(task.id));
-          if (task.waitEnd) markColumns(columns, addD(task.end, 1), task.waitEnd);
-          rows.push({ columns });
-        });
-      });
-    }
-
-    const rowCount = rows.length;
-    if (rowCount === 0 || VIEW_DAYS === 0) return [];
-
-    // 2. 隨機放置（嚴格不重疊:含彼此與甘特條）。seed 由「版面 + 本次載入的隨機種子」衍生:
-    //    切換疊圖 / 換週 / 縮放 → 版面變 → 重新散佈以避免壓到甘特條;同版面 re-render
-    //    或切出分頁再切回 → seed 不變 → 位置穩定。重新整理頁面 → SESSION_CAT_SEED 變 → 位置不同。
-    let occupiedCount = 0;
-    rows.forEach(row => { occupiedCount += row.full ? VIEW_DAYS : row.columns.size; });
-    const seed = (overlayMode ? 1 : 0) * 2654435761 + rowCount * 40503 + VIEW_DAYS * 769 +
-      COL_W * 97 + occupiedCount * 13 + (viewStart.getTime() / 864e5 | 0) + SESSION_CAT_SEED;
-    const rng = mulberry32(seed);
-
-    const ROW_H = 40;
-    const targetCount = catCount;
-    const placed = [];
-    const fits = (rowStart, columnStart, rowsNeed, columnsNeed) => {
-      if (rowStart + rowsNeed > rowCount || columnStart + columnsNeed > VIEW_DAYS) return false;
-      for (let rowIndex = rowStart; rowIndex < rowStart + rowsNeed; rowIndex++) {
-        const row = rows[rowIndex];
-        if (row.full) return false;
-        for (let columnIndex = columnStart; columnIndex < columnStart + columnsNeed; columnIndex++) {
-          if (row.columns.has(columnIndex)) return false;
-        }
-      }
-      return true;
-    };
-    const occupy = (rowStart, columnStart, rowsNeed, columnsNeed) => {
-      for (let rowIndex = rowStart; rowIndex < rowStart + rowsNeed; rowIndex++) {
-        for (let columnIndex = columnStart; columnIndex < columnStart + columnsNeed; columnIndex++) rows[rowIndex].columns.add(columnIndex);
-      }
-    };
-    for (let catIndex = 0; catIndex < targetCount; catIndex++) {
-      const size = Math.round(100 + rng() * 50); // 100~150
-      const columnsNeed = Math.ceil(size / COL_W);
-      const rowsNeed = Math.ceil(size / ROW_H);
-      for (let attempt = 0; attempt < 30; attempt++) {
-        const rowStart = Math.floor(rng() * Math.max(1, rowCount - rowsNeed + 1));
-        const columnStart = Math.floor(rng() * Math.max(1, VIEW_DAYS - columnsNeed + 1));
-        if (!fits(rowStart, columnStart, rowsNeed, columnsNeed)) continue;
-        occupy(rowStart, columnStart, rowsNeed, columnsNeed);
-        placed.push({
-          key: `${overlayMode ? 'o' : 'n'}-${catIndex}-${rowStart}-${columnStart}`,
-          left: columnStart * COL_W,
-          top: rowStart * ROW_H,
-          size,
-        });
-        break;
-      }
-    }
-    return placed;
-  }, [overlayMode, normalGroups, overlayRows, viewStart, VIEW_DAYS, preference.catEnabled, preference.catCount]);
+    return { phases: groupByPhase(records, members, ownerId, memberIdSet) };
+  }, [selectedProjects, data, members, ownerId, memberIdSet]);
 
   const milestones = useMemo(() => {
     const result = [];
@@ -388,6 +346,89 @@ export default function GanttView({ selectedProjects, onToggleMode }) {
   const periodBarHeight = periodIsMulti
     ? Math.floor((40 - periodPad * 2 - periodGap * (periodLaneCount - 1)) / periodLaneCount)
     : undefined;
+
+  // 背景日格(每格寬 COL_W);相位/成員的每一列軌道都鋪一份,讓欄位對齊日期軸。
+  const renderGridCells = () =>
+    gridDays.map((gridDay, index) => (
+      <div key={index}
+        className={`${styles.gridCell}${gridDay.isWeekend ? ` ${styles.weekend}` : ''}`}
+        style={{ width: COL_W }} />
+    ));
+
+  // 左欄:一列成員名稱(頭像首字 + 名稱 + 任務數);未指派列灰化。
+  // 列高跟著右軌甘特列一起由 lane 數撐開(rowHeight),兩邊同一 row 才對得齊。
+  const renderMemberName = (row) => (
+    <div key={row.memberId ?? '__unassigned'}
+      className={`${styles.memberName}${row.memberId === null ? ` ${styles.unassigned}` : ''}`}
+      style={{ height: rowHeight(row.laneCount) }}>
+      <span className={styles.memberAvatar}>{(row.memberName || '?').slice(0, 1)}</span>
+      <span className={styles.name}>{row.memberName}</span>
+      {row.items.length > 0 && <span className={styles.memberCount}>{row.items.length}</span>}
+    </div>
+  );
+
+  // 右軌:一位成員在某相位的一列。列高由 lane 數撐開(rowHeight);任務塊依起訖日 × COL_W 定位,
+  // 同格重疊者依序往下疊 lane(top = LANE_PAD + lane × 單位高),全部顯示、不再收成「+N」。
+  const renderMemberRow = (row) => (
+    <div key={row.memberId ?? '__unassigned'}
+      className={`${styles.memberRow}${row.memberId === null ? ` ${styles.unassigned}` : ''}`}
+      style={{ height: rowHeight(row.laneCount) }}>
+      {renderGridCells()}
+      {row.items.map((item) => {
+        const { record, project, tone } = item;
+        const top = LANE_PAD + item.lane * (LANE_H + LANE_GAP);
+        const projectTask = (project.tasks || []).find(candidate => candidate.id === record.id);
+        const isPinned = !!projectTask?.pinnedStart;
+        const parsedPinDate = isPinned ? pD(projectTask.pinnedStart) : null;
+        const pinOverridden = isPinned && parsedPinDate && new Date(record.start) > parsedPinDate;
+        return (
+          <div key={`${project.id}-${record.id}`}>
+            {barSegments(record.start, record.end, viewStart, WEEKEND_BAR_TASKS.has(record.id)).map((segment, segmentIndex) => (
+              <div key={segmentIndex}
+                className={`${styles.bar} ${styles[tone]}${record.hours === 0 ? ` ${styles.placeholder}` : ''}${isPinned ? ` ${styles.pinned}` : ''}`}
+                style={{ left: segment.columnStart * COL_W + 2, width: segment.span * COL_W - 4, top, height: LANE_H, bottom: 'auto' }}
+                onMouseEnter={(e) => handleBarEnter(e, record, project)}
+                onMouseLeave={handleBarLeave}
+                onDoubleClick={(e) => handleBarDblClick(e, record, project)}>
+                <span className={styles.barName}>{segmentIndex === 0 ? record.n : '續'}</span>
+                {segmentIndex === 0 && record.hours > 0 && (
+                  <span className={styles.barHrs}>{record.hours}h</span>
+                )}
+                {segmentIndex === 0 && isPinned && (
+                  <i className={`ti ti-pin ${styles.pinIcon}${pinOverridden ? ` ${styles.warn}` : ''}`}></i>
+                )}
+              </div>
+            ))}
+            {record.waitEnd && barSegments(addD(record.end, 1), record.waitEnd, viewStart).map((segment, segmentIndex) => (
+              <div key={`w${segmentIndex}`}
+                className={styles.barWait}
+                style={{ left: segment.columnStart * COL_W + 2, width: segment.span * COL_W - 4, top, height: LANE_H, bottom: 'auto' }} />
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  // 左欄一個相位群組:相位名做「跨列合併」的直向格(佔滿該相位所有成員列高),右邊接一疊成員名。
+  const renderPhaseLeft = ({ phaseKey, phaseMeta, rows }) => (
+    <div key={phaseKey} className={styles.phaseGroup}>
+      <div className={styles.phaseLabel} style={{ '--phase-c': phaseMeta.c }}>
+        <span className={styles.phaseDot} style={{ background: phaseMeta.c }}></span>
+        <span className={styles.phaseText}>{phaseMeta.n}</span>
+      </div>
+      <div className={styles.phaseMembers}>
+        {rows.map(renderMemberName)}
+      </div>
+    </div>
+  );
+
+  // 右軌一個相位群組:只疊該相位的成員甘特列(相位名在左欄的合併格,這裡不再放間隔列)。
+  const renderPhaseTrack = ({ phaseKey, rows }) => (
+    <div key={phaseKey} className={styles.phaseTrack}>
+      {rows.map(renderMemberRow)}
+    </div>
+  );
 
   return (
     <>
@@ -442,47 +483,22 @@ export default function GanttView({ selectedProjects, onToggleMode }) {
           <div className={styles.grid} style={{ minWidth: LABEL_W + COL_W * VIEW_DAYS }}>
 
             <aside className={styles.taskCol}>
+              <div className={styles.colHead}>{overlayMode ? '成員負載 · 多專案疊加' : '成員負載'}</div>
+              {hasPeriodBars && (
+                <div className={styles.periodLabel}>期間</div>
+              )}
               {overlayMode ? (
-                <>
-                  <div className={styles.colHead}>任務 · 多專案疊加</div>
-                  {hasPeriodBars && (
-                    <div className={styles.periodLabel}>期間</div>
-                  )}
-                  {overlayRows.map(({ id, name, bars }) => (
-                    <div key={id} className={styles.taskName}>
-                      <span className={styles.pid}>{id}</span>
-                      <span className={styles.name}>{name}</span>
-                      <span className={styles.projDots}>
-                        {bars.map(({ project, tone }) => (
-                          <span key={project.id} className={`${styles.pd} ${styles[tone]}`}></span>
-                        ))}
-                      </span>
-                    </div>
-                  ))}
-                </>
+                phaseGroupsOverlay.phases.map(renderPhaseLeft)
               ) : (
-                <>
-                  <div className={styles.colHead}>任務</div>
-                  {hasPeriodBars && (
-                    <div className={styles.periodLabel}>期間</div>
-                  )}
-                  {normalGroups.map(({ project, tasks, tone }) => (
-                    <div key={project.id}>
-                      <div className={`${styles.projBanner} ${styles[tone]}`}>
-                        <span className={styles.bannerDot} style={{ background: `var(--t-${tone}-ink)` }}></span>
-                        {project.name}
-                        <i className={`ti ti-chevron-down ${styles.collapse}`}></i>
-                      </div>
-                      {tasks.map(task => (
-                        <div key={task.id} className={styles.taskName}>
-                          <span className={styles.pid}>{task.id}</span>
-                          <span className={styles.name}>{task.n}</span>
-                          <span className={styles.hrs}>{task.hours ? `${task.hours}h` : ''}</span>
-                        </div>
-                      ))}
+                phaseGroupsNormal.map(({ project, tone, phases }) => (
+                  <div key={project.id}>
+                    <div className={`${styles.projBanner} ${styles[tone]}`}>
+                      <span className={styles.bannerDot} style={{ background: `var(--t-${tone}-ink)` }}></span>
+                      {project.name}
                     </div>
-                  ))}
-                </>
+                    {phases.map(renderPhaseLeft)}
+                  </div>
+                ))
               )}
             </aside>
 
@@ -546,108 +562,17 @@ export default function GanttView({ selectedProjects, onToggleMode }) {
                 ))}
 
                 {overlayMode ? (
-                  overlayRows.map(({ id, bars }) => {
-                    const hasTimeOverlap = bars.length >= 2 && bars.some((a, indexA) =>
-                      bars.some((b, indexB) => {
-                        if (indexB <= indexA) return false;
-                        return new Date(a.task.start) <= new Date(b.task.end) &&
-                               new Date(b.task.start) <= new Date(a.task.end);
-                      })
-                    );
-                    const isMulti = hasTimeOverlap;
-                    const barCount = bars.length;
-                    const PAD = 4, GAP = 2;
-                    const barHeight = isMulti ? Math.floor((40 - PAD * 2 - GAP * (barCount - 1)) / barCount) : undefined;
-                    return (
-                      <div key={id} className={styles.taskRow}>
-                        {gridDays.map((gridDay, index) => (
-                          <div key={index} className={`${styles.gridCell}${gridDay.isWeekend ? ` ${styles.weekend}` : ''}`}
-                            style={{ width: COL_W }} />
-                        ))}
-                        {bars.map(({ project, task, tone }, barIndex) => {
-                          const barTop = isMulti ? PAD + barIndex * (barHeight + GAP) : undefined;
-                          return (
-                            <div key={project.id}>
-                              {barSegments(task.start, task.end, viewStart, WEEKEND_BAR_TASKS.has(task.id)).map((segment, segmentIndex) => (
-                                <div key={`${project.id}-${segmentIndex}`}
-                                  className={`${styles.bar} ${styles[tone]}${task.hours === 0 ? ` ${styles.placeholder}` : ''}${isMulti ? ` ${styles.split}` : ''}`}
-                                  style={{
-                                    left: segment.columnStart * COL_W + 2,
-                                    width: segment.span * COL_W - 4,
-                                    ...(isMulti ? { top: barTop, height: barHeight, bottom: 'auto' } : {}),
-                                  }}
-                                  onMouseEnter={(e) => handleBarEnter(e, task, project)}
-                                  onMouseLeave={handleBarLeave}
-                                  onDoubleClick={(e) => handleBarDblClick(e, task, project)}>
-                                  {!isMulti && <span className={styles.barDot}></span>}
-                                  {!isMulti && <span className={styles.barName}>{segmentIndex === 0 ? task.n : '續'}</span>}
-                                </div>
-                              ))}
-                              {!isMulti && task.waitEnd && barSegments(addD(task.end, 1), task.waitEnd, viewStart).map((segment, segmentIndex) => (
-                                <div key={`w${project.id}-${segmentIndex}`}
-                                  className={styles.barWait}
-                                  style={{ left: segment.columnStart * COL_W + 2, width: segment.span * COL_W - 4 }} />
-                              ))}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })
+                  phaseGroupsOverlay.phases.map(renderPhaseTrack)
                 ) : (
-                  normalGroups.map(({ project, tasks, tone }) => (
+                  phaseGroupsNormal.map(({ project, tone, phases }) => (
                     <div key={project.id}>
                       <div className={`${styles.projRow} ${styles[tone]}`}>
-                        {gridDays.map((gridDay, index) => (
-                          <div key={index} className={`${styles.gridCell}${gridDay.isWeekend ? ` ${styles.weekend} ${styles.dim}` : ''}`}
-                            style={{ width: COL_W }} />
-                        ))}
+                        {renderGridCells()}
                       </div>
-                      {tasks.map(task => {
-                        const projectTask = (project.tasks || []).find(candidate => candidate.id === task.id);
-                        const isPinned = !!projectTask?.pinnedStart;
-                        const parsedPinDate = isPinned ? pD(projectTask.pinnedStart) : null;
-                        const pinOverridden = isPinned && parsedPinDate && new Date(task.start) > parsedPinDate;
-                        return (
-                          <div key={task.id} className={styles.taskRow}>
-                            {gridDays.map((gridDay, index) => (
-                              <div key={index} className={`${styles.gridCell}${gridDay.isWeekend ? ` ${styles.weekend}` : ''}`}
-                                style={{ width: COL_W }} />
-                            ))}
-                            {barSegments(task.start, task.end, viewStart, WEEKEND_BAR_TASKS.has(task.id)).map((segment, segmentIndex) => (
-                              <div key={segmentIndex}
-                                className={`${styles.bar} ${styles[tone]}${task.hours === 0 ? ` ${styles.placeholder}` : ''}${isPinned ? ` ${styles.pinned}` : ''}`}
-                                style={{ left: segment.columnStart * COL_W + 2, width: segment.span * COL_W - 4 }}
-                                onMouseEnter={(e) => handleBarEnter(e, task, project)}
-                                onMouseLeave={handleBarLeave}
-                                onDoubleClick={(e) => handleBarDblClick(e, task, project)}>
-                                <span className={styles.barName}>{segmentIndex === 0 ? task.n : '續'}</span>
-                                {segmentIndex === 0 && task.hours > 0 && (
-                                  <span className={styles.barHrs}>{task.hours}h</span>
-                                )}
-                                {segmentIndex === 0 && isPinned && (
-                                  <i className={`ti ti-pin ${styles.pinIcon}${pinOverridden ? ` ${styles.warn}` : ''}`}></i>
-                                )}
-                              </div>
-                            ))}
-                            {task.waitEnd && barSegments(addD(task.end, 1), task.waitEnd, viewStart).map((segment, segmentIndex) => (
-                              <div key={`w${segmentIndex}`}
-                                className={styles.barWait}
-                                style={{ left: segment.columnStart * COL_W + 2, width: segment.span * COL_W - 4 }}>
-                                {segmentIndex === 0 && <span className={styles.barWaitLabel}>等待</span>}
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })}
+                      {phases.map(renderPhaseTrack)}
                     </div>
                   ))
                 )}
-
-                {catPlacements.map(cat => (
-                  <RandomCat key={cat.key} size={cat.size} className={styles.cat}
-                    style={{ left: cat.left, top: cat.top }} />
-                ))}
               </div>
             </div>
           </div>
