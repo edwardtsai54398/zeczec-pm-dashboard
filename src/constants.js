@@ -34,7 +34,6 @@ export const NAV = [
 
 export const D_SETTINGS = {
   hoursPerDay: 8,
-  blackouts: [],
 };
 
 // 每位使用者各自的 UI 偏好(貓)單獨存一個 key,與 workspace 共用的 cfpm4(專案+排程設定)分開。
@@ -50,5 +49,11 @@ export const DEFAULT_PREFERENCES = {
 
 export const DEFAULT_WORKSPACE_SETTINGS = {
   hoursPerDay: D_SETTINGS.hoursPerDay,
-  blackouts: D_SETTINGS.blackouts,
+};
+
+// 成員加入工作區時(含 onboarding 的 owner)直接種進 workspace_members.settings 的預設。
+// 每人一進來就有明確的每日工時,不再靠讀取端的 fallback 補;休假一開始為空。
+export const DEFAULT_MEMBER_SETTINGS = {
+  daily_hours: D_SETTINGS.hoursPerDay,
+  days_off: [],
 };

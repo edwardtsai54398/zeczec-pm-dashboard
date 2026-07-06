@@ -17,10 +17,21 @@ export function useProjectEditor({ projects, sel, setProjects, saveProjectToClou
   // 只在 sel/isNew 真的變動時才重設,別頁改全域 projects(如 Gantt 釘選)不會誤清掉草稿。
   const prevSel = useRef(sel);
   const prevIsNew = useRef(isNew);
+  // 記住草稿所根據的「已存版本」,用來判斷背景寫入後是否可安全跟進。
+  const baseRef = useRef(saved);
   if (sel !== prevSel.current || isNew !== prevIsNew.current) {
     prevSel.current = sel;
     prevIsNew.current = isNew;
-    setDraft(isNew ? makeDraft() : (projects.find((p) => p.id === sel) ?? null));
+    const fresh = isNew ? makeDraft() : (projects.find((p) => p.id === sel) ?? null);
+    setDraft(fresh);
+    baseRef.current = isNew ? null : fresh;
+  } else if (!isNew && saved && baseRef.current && saved.version !== baseRef.current.version) {
+    // 背景寫入(快速排程/遷移/甘特釘選等)bump 了版本:草稿相對「當時的已存版本」沒有未存編輯時,
+    // 跟進最新版本(含新排程),避免草稿停在舊版本被誤判 dirty、之後儲存卡樂觀鎖。
+    if (draft && JSON.stringify(projectToRow(draft)) === JSON.stringify(projectToRow(baseRef.current))) {
+      setDraft(saved);
+    }
+    baseRef.current = saved;
   }
 
   // 新專案永遠視為「有未存內容」:讓儲存鈕出現、離開時被 useBlocker 攔下。
@@ -46,13 +57,16 @@ export function useProjectEditor({ projects, sel, setProjects, saveProjectToClou
     const updated = await saveProjectToCloud(draft);
     setProjects((v) => v.map((p) => (p.id === updated.id ? updated : p)));
     setDraft(updated);
+    baseRef.current = updated;
     return updated;
   }, [draft, isNew, insertProjectToCloud, saveProjectToCloud, setProjects]);
 
   // 捨棄:既有專案回到目前已存版本;新專案直接丟棄。
   const discard = useCallback(() => {
     if (isNew) return;
-    setDraft(projects.find((p) => p.id === sel) ?? null);
+    const cur = projects.find((p) => p.id === sel) ?? null;
+    setDraft(cur);
+    baseRef.current = cur;
   }, [projects, sel, isNew]);
 
   return { draft, updateDraft, dirty, save, discard };

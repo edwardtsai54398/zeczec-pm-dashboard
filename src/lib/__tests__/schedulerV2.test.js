@@ -75,12 +75,12 @@ describe('basic scheduling', () => {
     expect(fmtF(sch['p']['1B.1'].start)).toBe('2026-05-18');
   });
 
-  it('startDate inside blackout advances past blackout', () => {
-    // Block Tue–Fri; projStart advances to following Monday 2026-05-25
+  it('M1: settings.blackouts 已停用,帶不帶 blackout 排程結果相同', () => {
+    // 全域 blackout 移除後,即使 settings 帶 blackouts 也被忽略(改版後只避開週末)
     const blackouts = [{ start: START, end: '2026-05-22' }];
-    const p = proj('p', START);
-    const { sch } = runScheduleV2([p], { ...settings, blackouts });
-    expect(fmtF(sch['p']['1B.1'].start)).toBe('2026-05-25');
+    const withBo = runScheduleV2([proj('p', START)], { ...settings, blackouts }).sch;
+    const noBo   = runScheduleV2([proj('p', START)], settings).sch;
+    expect(fmtF(withBo['p']['1B.1'].start)).toBe(fmtF(noBo['p']['1B.1'].start));
   });
 
   it('project with no valid startDate is skipped', () => {
@@ -863,22 +863,14 @@ describe('scenario: startDate 2026-05-20, Jun10-16 blockout', () => {
     }
   });
 
-  it('2.8 waitEnd unchanged by blackout; downstream 2.9 starts later because user is on leave', () => {
+  it('M1: settings.blackouts 已停用,2.9 不因請假被延後(與無 blackout 結果相同)', () => {
     const p = proj('p', scenarioProject.startDate, { surveyStart: scenarioProject.surveyStart, campaignStart: scenarioProject.campaignStart });
     const { sch: schRef } = runScheduleV2([p], settings);     // no blackout
-    const { sch: schBo  } = runScheduleV2([p], boSettings);  // with blackout
+    const { sch: schBo  } = runScheduleV2([p], boSettings);  // blackouts 已被忽略
 
-    const t28_ref = schRef['p']['2.8'];
-    const t28_bo  = schBo['p']['2.8'];
-    const t29_ref = schRef['p']['2.9'];
-    const t29_bo  = schBo['p']['2.9'];
-
-    // 2.8 ends before Jun10; waitEnd (Jun12) is within the blackout
-    // but external designer is unaffected → waitEnd must stay the same
-    expect(fmtF(t28_bo.end)).toBe(fmtF(t28_ref.end));
-    expect(fmtF(t28_bo.waitEnd)).toBe(fmtF(t28_ref.waitEnd));
-
-    // user can't start 2.9 during blackout → 2.9 start is pushed to after Jun16
-    expect(t29_bo.start > t29_ref.start).toBe(true);
+    // 全域 blackout 停用:兩種 settings 結果一致 —— 2.8 end/waitEnd 與下游 2.9 start 都不受影響
+    expect(fmtF(schBo['p']['2.8'].end)).toBe(fmtF(schRef['p']['2.8'].end));
+    expect(fmtF(schBo['p']['2.8'].waitEnd)).toBe(fmtF(schRef['p']['2.8'].waitEnd));
+    expect(fmtF(schBo['p']['2.9'].start)).toBe(fmtF(schRef['p']['2.9'].start));
   });
 });

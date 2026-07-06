@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient.js';
-import { DEFAULT_PREFERENCES, DEFAULT_WORKSPACE_SETTINGS } from '../constants.js';
+import { DEFAULT_PREFERENCES, DEFAULT_WORKSPACE_SETTINGS, DEFAULT_MEMBER_SETTINGS } from '../constants.js';
 import { writePreference } from '../lib/preference.js';
 
 // onboarding 完成時，幫使用者建立自己的 workspace 與 owner 身分。
@@ -35,9 +35,10 @@ async function ensureOwnerWorkspace(userId, workspaceName) {
   //    帶 onConflict 會生成 ON CONFLICT DO UPDATE,把 workspace_members 的 UPDATE 政策也拉進
   //    RLS 評估;而 onboarding 當下使用者還不是成員、UPDATE 政策過不了 → 整筆被擋(42501)。
   //    純 insert 只走 INSERT 政策(owner bootstraps own membership,已實測會過)。
+  //    settings 直接種每日工時預設,讓 owner 一建立就有明確工時(比照後續加入的成員)。
   const { error: memberErr } = await supabase
     .from('workspace_members')
-    .insert({ workspace_id: workspaceId, user_id: userId, role: 'owner' });
+    .insert({ workspace_id: workspaceId, user_id: userId, role: 'owner', settings: DEFAULT_MEMBER_SETTINGS });
   if (memberErr && memberErr.code !== '23505') throw memberErr;
 }
 

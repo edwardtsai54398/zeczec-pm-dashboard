@@ -2,7 +2,7 @@ import { useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient.js';
 import { STORAGE_KEY, DEFAULT_WORKSPACE_SETTINGS } from '../constants.js';
 
-// workspace 設定(每日工時 hoursPerDay + 不可用時段 blackouts)的雲端資料層。
+// workspace 設定(每日工時預設 hoursPerDay)的雲端資料層。全域 blackout 已移除,改由每位成員各自設休假。
 // 雲端是唯一真相;載入後 setSettings 覆蓋全域,usePersistence 的 effect 會寫回 localStorage 當快取。
 // workspace 單人擁有、設定變動頻率低,儲存不加 version 樂觀鎖(與 projects 不同)。
 
@@ -65,7 +65,7 @@ export function useCloudWorkspaceSettings(workspaceId, setSettings) {
     return () => { cancelled = true; };
   }, [workspaceId, setSettings]);
 
-  // 儲存整包 settings(呼叫端合併好 hoursPerDay/blackouts 再傳進來,避免共欄互蓋)。
+  // 儲存整包 settings(呼叫端合併好 hoursPerDay 再傳進來,避免共欄互蓋)。
   const saveSettingsToCloud = useCallback(async (next) => {
     if (!workspaceId) throw new Error('尚未取得工作區');
     const { error } = await supabase

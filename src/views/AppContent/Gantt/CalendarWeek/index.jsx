@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { addD, dBt, fmt, fmtF, pD, isBO as checkBO } from '../../../../lib/dateUtils.js';
+import { addD, dBt, fmt, fmtF, pD } from '../../../../lib/dateUtils.js';
 import { WEEK } from '../../shared.js';
 import { useWorkspace } from '../../../../context/WorkspaceContext.jsx';
 import { usePermissions } from '../../../../hooks/usePermissions.js';
@@ -13,7 +13,7 @@ const HOUR_H = 70;
 
 export default function CalendarWeek({ selectedProjects, onToggleMode }) {
   // 資料層直接從 context 取(比照 GanttView);篩選 state 由 Gantt 容器持有。
-  const { projects, sch: data, settings, updateTaskPin } = useWorkspace();
+  const { projects, sch: data, settings, applyTaskDateChange } = useWorkspace();
   const { can } = usePermissions();
   const canEdit = can('editGantt'); // viewer 不能訂選任務日期(double click 無效)
 
@@ -31,7 +31,6 @@ export default function CalendarWeek({ selectedProjects, onToggleMode }) {
   const goToToday = () => setWeekStart(sunday(today));
 
   const weekDays = useMemo(() => {
-    const blackouts = settings?.blackouts || [];
     const cells = [];
     for (let i = 0; i < 7; i++) {
       const date = addD(weekStart, i);
@@ -42,12 +41,11 @@ export default function CalendarWeek({ selectedProjects, onToggleMode }) {
         key: fmtF(date),
         dayOfWeek,
         isWeekend,
-        isBlackout: !isWeekend && checkBO(date, blackouts),
         isToday: +date === +today,
       });
     }
     return cells;
-  }, [weekStart, settings, today]);
+  }, [weekStart, today]);
 
   // 依排程器的每日分配明細(task.days)把任務攤進各天:
   // 有工時的任務照 { h, o } 畫成區塊;0 工時任務(發文類)進頂部全天列。
@@ -195,7 +193,7 @@ export default function CalendarWeek({ selectedProjects, onToggleMode }) {
           <div className={styles.days}>
             {weekDays.map(day => (
               <div key={day.key}
-                className={`${styles.dayHead}${day.isWeekend ? ` ${styles.weekend}` : day.isBlackout ? ` ${styles.blackout}` : ''}${day.isToday ? ` ${styles.today}` : ''}`}>
+                className={`${styles.dayHead}${day.isWeekend ? ` ${styles.weekend}` : ''}${day.isToday ? ` ${styles.today}` : ''}`}>
                 <span className={styles.dayName}>週{WEEK[day.dayOfWeek]}</span>
                 <span className={styles.dayNum}>{day.date.getDate()}</span>
               </div>
@@ -251,7 +249,7 @@ export default function CalendarWeek({ selectedProjects, onToggleMode }) {
             <div className={styles.daysArea}>
               {weekDays.map(day => (
                 <div key={day.key}
-                  className={`${styles.dayCol}${day.isWeekend ? ` ${styles.weekend}` : day.isBlackout ? ` ${styles.blackout}` : ''}${day.isToday ? ` ${styles.today}` : ''}`}>
+                  className={`${styles.dayCol}${day.isWeekend ? ` ${styles.weekend}` : ''}${day.isToday ? ` ${styles.today}` : ''}`}>
                   {dayBlocks[day.key].map(({ task, project, tone, hours, offset }) => (
                     <div key={`${project.id}-${task.id}`}
                       className={`${styles.block} ${styles[tone]}`}
@@ -316,7 +314,7 @@ export default function CalendarWeek({ selectedProjects, onToggleMode }) {
           state={pinState}
           projects={projects}
           data={data}
-          onSave={updateTaskPin}
+          onSave={applyTaskDateChange}
           onClose={() => setPinState(null)}
         />
       )}

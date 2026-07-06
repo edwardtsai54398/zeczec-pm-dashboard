@@ -3,11 +3,24 @@ import ConfirmModal from '../../../components/ConfirmModal.jsx';
 import { ROLE_LABELS } from '../../../lib/permissions.js';
 import styles from './SettingsPage.module.css';
 
+// 休假範圍 [{start,end}] 的總天數(含頭尾)。給清單唯讀顯示「休 N 天」用。
+function countDaysOff(ranges) {
+  if (!ranges?.length) return 0;
+  const MS_PER_DAY = 86400000;
+  return ranges.reduce((total, range) => {
+    const start = new Date(range.start), end = new Date(range.end);
+    if (Number.isNaN(+start) || Number.isNaN(+end)) return total;
+    return total + Math.floor((end - start) / MS_PER_DAY) + 1;
+  }, 0);
+}
+
 // 工作區成員清單:「工作區設定」卡片的一段。純呈現用葉子元件,資料/handler 由 SettingsPage 傳入。
+// 每列唯讀顯示該成員的每日工時 + 休假天數(工時 / 休假只能各人在「個人化設定」改自己的)。
 // canManage(owner)時每列給「改角色 / 踢除」控制項;非 owner 唯讀。自己那列一律唯讀,
 // 不能自我降級 / 自我踢除(後端 RPC 也會擋,這裡先讓 UI 不出現控制項)。
 export default function MembersEditor({
-  members, loading, error, canManage, currentUserId, onRoleChange, onRemove,
+  members, loading, error, canManage, currentUserId, defaultHours,
+  onRoleChange, onRemove,
 }) {
   // 待移除的成員(驅動 ConfirmModal);踢除 / 改角色的失敗訊息 inline 顯示。
   const [pendingRemove, setPendingRemove] = useState(null);
@@ -44,49 +57,59 @@ export default function MembersEditor({
           {members.map((member) => {
             const isSelf = member.user_id === currentUserId;
             const editable = canManage && !isSelf;
+            const hours = member.settings?.daily_hours ?? defaultHours;
+            const daysOff = countDaysOff(member.settings?.days_off);
             return (
-              <li key={member.user_id} className={styles.memberRow}>
-                <span className={styles.memberAvatar} aria-hidden="true">
-                  {(member.display_name || member.email || '?').trim().charAt(0).toUpperCase()}
-                </span>
-                <span className={styles.memberInfo}>
-                  <span className={styles.memberName}>
-                    {member.display_name || '(未命名)'}
-                    {isSelf && <span className={styles.youBadge}>你</span>}
+              <li key={member.user_id} className={styles.memberItem}>
+                <div className={styles.memberRow}>
+                  <span className={styles.memberAvatar} aria-hidden="true">
+                    {(member.display_name || member.email || '?').trim().charAt(0).toUpperCase()}
                   </span>
-                  <span className={styles.memberEmail}>{member.email}</span>
-                </span>
+                  <span className={styles.memberInfo}>
+                    <span className={styles.memberName}>
+                      {member.display_name || '(未命名)'}
+                      {isSelf && <span className={styles.youBadge}>你</span>}
+                    </span>
+                    <span className={styles.memberEmail}>{member.email}</span>
+                  </span>
 
-                {canManage ? (
-                  // owner 每列都用下拉;自己那列停用(不能自我降級),但保留 select 外觀讓角色欄對齊
-                  <select
-                    className={`text-in ${styles.roleSelect}`}
-                    value={member.role}
-                    disabled={isSelf}
-                    onChange={(e) => changeRole(member.user_id, e.target.value)}
-                  >
-                    <option value="owner">{ROLE_LABELS.owner}</option>
-                    <option value="editor">{ROLE_LABELS.editor}</option>
-                    <option value="viewer">{ROLE_LABELS.viewer}</option>
-                  </select>
-                ) : (
-                  <span className={styles.roleLabel}>{ROLE_LABELS[member.role] ?? member.role}</span>
-                )}
+                  {/* 唯讀:每日工時 + 休假天數(排程負載的依據,只能各人改自己的) */}
+                  <span className={styles.memberAvail}>
+                    <span>{hours}h</span>
+                    {daysOff > 0 && <span className={styles.memberDaysOff}>休 {daysOff} 天</span>}
+                  </span>
 
-                {editable ? (
-                  <button
-                    type="button"
-                    className={styles.removeBtn}
-                    title="移除成員"
-                    aria-label={`移除 ${member.display_name || member.email}`}
-                    onClick={() => setPendingRemove(member)}
-                  >
-                    <i className="ti ti-trash" aria-hidden="true" />
-                  </button>
-                ) : (
-                  // 沒有踢除鈕的列補一個同寬佔位,讓角色欄跨列右緣對齊,不會被推到最右
-                  <span className={styles.removeSpacer} aria-hidden="true" />
-                )}
+                  {canManage ? (
+                    // owner 每列都用下拉;自己那列停用(不能自我降級),但保留 select 外觀讓角色欄對齊
+                    <select
+                      className={`text-in ${styles.roleSelect}`}
+                      value={member.role}
+                      disabled={isSelf}
+                      onChange={(e) => changeRole(member.user_id, e.target.value)}
+                    >
+                      <option value="owner">{ROLE_LABELS.owner}</option>
+                      <option value="editor">{ROLE_LABELS.editor}</option>
+                      <option value="viewer">{ROLE_LABELS.viewer}</option>
+                    </select>
+                  ) : (
+                    <span className={styles.roleLabel}>{ROLE_LABELS[member.role] ?? member.role}</span>
+                  )}
+
+                  {editable ? (
+                    <button
+                      type="button"
+                      className={styles.removeBtn}
+                      title="移除成員"
+                      aria-label={`移除 ${member.display_name || member.email}`}
+                      onClick={() => setPendingRemove(member)}
+                    >
+                      <i className="ti ti-trash" aria-hidden="true" />
+                    </button>
+                  ) : (
+                    // 沒有踢除鈕的列補一個同寬佔位,讓角色欄跨列右緣對齊,不會被推到最右
+                    <span className={styles.removeSpacer} aria-hidden="true" />
+                  )}
+                </div>
               </li>
             );
           })}

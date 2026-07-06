@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { dBt, addD, fmt, pD, isBO as checkBO } from '../../../../lib/dateUtils.js';
+import { dBt, addD, fmt, pD } from '../../../../lib/dateUtils.js';
 import RandomCat from '../../../../components/CatSvg/RandomCat.jsx';
 import { readPreference } from '../../../../lib/preference.js';
 import { useWorkspace } from '../../../../context/WorkspaceContext.jsx';
@@ -86,7 +86,7 @@ const SESSION_CAT_SEED = (Math.random() * 4294967296) >>> 0;
 
 export default function GanttView({ selectedProjects, onToggleMode }) {
   // 資料層直接從 context 取(比照 Dashboard / KOLPage);篩選 state 由 Gantt 容器持有。
-  const { projects, sch: data, settings, updateTaskPin } = useWorkspace();
+  const { projects, sch: data, applyTaskDateChange } = useWorkspace();
   const { can } = usePermissions();
   const canEdit = can('editGantt'); // viewer 不能訂選任務日期(double click 無效)
 
@@ -130,16 +130,15 @@ export default function GanttView({ selectedProjects, onToggleMode }) {
   const [pinState, setPinState] = useState(null);
 
   const gridDays = useMemo(() => {
-    const blackouts = settings?.blackouts || [];
     const cells = [];
     for (let i = 0; i < VIEW_DAYS; i++) {
       const date = addD(viewStart, i);
       const dayOfWeek = date.getDay();
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-      cells.push({ date, isWeekend, dayOfWeek, isBlackout: !isWeekend && checkBO(date, blackouts) });
+      cells.push({ date, isWeekend, dayOfWeek });
     }
     return cells;
-  }, [viewStart, VIEW_DAYS, settings]);
+  }, [viewStart, VIEW_DAYS]);
 
   const todayOffset = dBt(viewStart, today);
   const todayVisible = todayOffset >= 0 && todayOffset < VIEW_DAYS;
@@ -498,7 +497,7 @@ export default function GanttView({ selectedProjects, onToggleMode }) {
                   const isToday = todayVisible && index === todayOffset;
                   return (
                     <div key={index}
-                      className={`${styles.dateCell}${gridDay.isWeekend ? ` ${styles.weekend}` : gridDay.isBlackout ? ` ${styles.blackout}` : ''}${isToday ? ` ${styles.today}` : ''}`}
+                      className={`${styles.dateCell}${gridDay.isWeekend ? ` ${styles.weekend}` : ''}${isToday ? ` ${styles.today}` : ''}`}
                       style={{ width: COL_W }}>
                       {isToday && <span className={styles.todayBubble}>今天</span>}
                       <span className={styles.dayNum}>{gridDay.date.getDate()}</span>
@@ -511,7 +510,7 @@ export default function GanttView({ selectedProjects, onToggleMode }) {
               {hasPeriodBars && (
                 <div className={styles.periodBand}>
                   {gridDays.map((gridDay, index) => (
-                    <div key={index} className={`${styles.gridCell}${gridDay.isWeekend ? ` ${styles.weekend}` : gridDay.isBlackout ? ` ${styles.blackout}` : ''}`} style={{ width: COL_W }} />
+                    <div key={index} className={`${styles.gridCell}${gridDay.isWeekend ? ` ${styles.weekend}` : ''}`} style={{ width: COL_W }} />
                   ))}
                   {periodBars.map((bar, barIndex) =>
                     barSegments(bar.start, bar.end, viewStart, true).map((segment, segmentIndex) => (
@@ -562,7 +561,7 @@ export default function GanttView({ selectedProjects, onToggleMode }) {
                     return (
                       <div key={id} className={styles.taskRow}>
                         {gridDays.map((gridDay, index) => (
-                          <div key={index} className={`${styles.gridCell}${gridDay.isWeekend ? ` ${styles.weekend}` : gridDay.isBlackout ? ` ${styles.blackout}` : ''}`}
+                          <div key={index} className={`${styles.gridCell}${gridDay.isWeekend ? ` ${styles.weekend}` : ''}`}
                             style={{ width: COL_W }} />
                         ))}
                         {bars.map(({ project, task, tone }, barIndex) => {
@@ -600,7 +599,7 @@ export default function GanttView({ selectedProjects, onToggleMode }) {
                     <div key={project.id}>
                       <div className={`${styles.projRow} ${styles[tone]}`}>
                         {gridDays.map((gridDay, index) => (
-                          <div key={index} className={`${styles.gridCell}${gridDay.isWeekend ? ` ${styles.weekend} ${styles.dim}` : gridDay.isBlackout ? ` ${styles.blackout} ${styles.dim}` : ''}`}
+                          <div key={index} className={`${styles.gridCell}${gridDay.isWeekend ? ` ${styles.weekend} ${styles.dim}` : ''}`}
                             style={{ width: COL_W }} />
                         ))}
                       </div>
@@ -612,7 +611,7 @@ export default function GanttView({ selectedProjects, onToggleMode }) {
                         return (
                           <div key={task.id} className={styles.taskRow}>
                             {gridDays.map((gridDay, index) => (
-                              <div key={index} className={`${styles.gridCell}${gridDay.isWeekend ? ` ${styles.weekend}` : gridDay.isBlackout ? ` ${styles.blackout}` : ''}`}
+                              <div key={index} className={`${styles.gridCell}${gridDay.isWeekend ? ` ${styles.weekend}` : ''}`}
                                 style={{ width: COL_W }} />
                             ))}
                             {barSegments(task.start, task.end, viewStart, WEEKEND_BAR_TASKS.has(task.id)).map((segment, segmentIndex) => (
@@ -691,7 +690,7 @@ export default function GanttView({ selectedProjects, onToggleMode }) {
           state={pinState}
           projects={projects}
           data={data}
-          onSave={updateTaskPin}
+          onSave={applyTaskDateChange}
           onClose={() => setPinState(null)}
         />
       )}

@@ -38,10 +38,44 @@ export function mkTasks(tpl) {
   }));
 }
 
-export function runScheduleV2(projects, settings) {
+// M2:把工作區成員清單解析成「每個 assignee 一桶」的可用性。
+//   byId[user_id] = { dailyHours, daysOff };ownerId = 未指派任務的落點(缺省桶)。
+// 未傳 members 時 ownerId=null、byId={},所有任務都落到單一預設桶(dailyHours=hoursPerDay、
+// 無休假),完全重現改版前的「全域一桶」行為——這是向後相容的硬約束。
+function buildAvailability(members, hoursPerDay) {
+  const ownerId = members?.find((member) => member.role === 'owner')?.user_id ?? null;
+  const byId = {};
+  for (const member of members || []) {
+    byId[member.user_id] = {
+      dailyHours: member.settings?.daily_hours ?? hoursPerDay,
+      daysOff: member.settings?.days_off ?? [],
+    };
+  }
+  return { ownerId, byId };
+}
 
-  const blackouts = settings?.blackouts || [];
+// options.frozen: { [pid]: { [taskId]: { start, end, waitEnd, hours, w, days } } }
+//   一組「已固定、視為已完成」的任務——退出重排 queue、以既有日期預先進 doneMap
+//   (讓相依鏈能接續在它之後),並依其 days 佔用當日工時容量。
+// options.startFloor: Date——重排的最早日;快速排程傳「今天」,避免未來任務因相依項已凍結在
+//   過去而被回填到過去(migration 不傳,沿用專案開始日=今日行為)。
+export function runScheduleV2(projects, settings, options = {}) {
+
+  // 週末仍是全員休假(整天跳過);個人休假改成 per-assignee 桶歸零,不再當全域 blackout 用。
+  const blackouts = [];
   const hoursPerDay = settings?.hoursPerDay || 8;
+  const frozen = options.frozen || {};
+  const startFloor = options.startFloor || null;
+
+  // M2:每天容量從「全域一桶」改成「每個 assignee 一桶」。任務落哪個桶:指定 assignee →
+  // owner(未指派)→ 單一預設桶(無成員時)。桶大小/休假查 avail,查不到退回工作區預設。
+  const avail = buildAvailability(options.members, hoursPerDay);
+  const bucketKeyFor = (entry) => entry.assignee || avail.ownerId || '__default__';
+  const dailyHoursFor = (key) => avail.byId[key]?.dailyHours ?? hoursPerDay;
+  const daysOffFor = (key) => avail.byId[key]?.daysOff ?? [];
+
+  // 凍結任務依「日期 + assignee」加總佔用工時,重排時當日該桶容量要扣掉
+  const reservedByAssignee = {};
 
   const projStates = [];
   for (const proj of projects) {
@@ -74,6 +108,8 @@ export function runScheduleV2(projects, settings) {
           pn:         proj.name,
           hours:      pt.pinnedHours != null ? pt.pinnedHours : t.h,
           w:          pt.pinnedWait  != null ? pt.pinnedWait  : (t.w || 0),
+          // assignee:哪個成員負責 → 決定吃哪個容量桶;缺省(未指派)= owner
+          assignee:    pt.assignee ?? null,
           dl:          t.dl,
           ns:          t.ns || false,
           d:           t.d || [],
@@ -102,6 +138,7 @@ export function runScheduleV2(projects, settings) {
             pn:          entry.pn,
             hours:       0.5,
             w:           entry.w,
+            assignee:    entry.assignee ?? null, // 審核子任務跟父任務同一個負責人
             dl:          entry.dl,
             ns:          entry.ns,
             d:           [entry.id],
@@ -119,6 +156,30 @@ export function runScheduleV2(projects, settings) {
       queue = expanded;
     }
 
+    // 凍結:把已固定的任務抽出 queue,以既有日期預先進 done/doneMap,並累計佔用工時。
+    const frozenForProj = frozen[proj.id] || {};
+    const seededDone = [];
+    const seededDoneMap = {};
+    if (Object.keys(frozenForProj).length > 0) {
+      const remaining = [];
+      for (const entry of queue) {
+        const fz = frozenForProj[entry.id];
+        if (!fz) { remaining.push(entry); continue; }
+        const fStart = parseDate(fz.start);
+        const fEnd = parseDate(fz.end);
+        const fWaitEnd = fz.waitEnd ? parseDate(fz.waitEnd) : null;
+        const fDays = fz.days || {};
+        seededDone.push(makeRecord(entry, fStart, fEnd, fWaitEnd, fDays));
+        seededDoneMap[entry.id] = { end: fEnd, waitEnd: fWaitEnd };
+        const frozenKey = bucketKeyFor(entry);
+        for (const dateKey of Object.keys(fDays)) {
+          const byKey = (reservedByAssignee[dateKey] ||= {});
+          byKey[frozenKey] = (byKey[frozenKey] || 0) + (fDays[dateKey].h || 0);
+        }
+      }
+      queue = remaining;
+    }
+
     projStates.push({
       proj,
       projStart,
@@ -131,8 +192,8 @@ export function runScheduleV2(projects, settings) {
       qIdx:         0,
       currentTask:  null,
       currentTask2: null,
-      done:         [],
-      doneMap:      {},
+      done:         seededDone,
+      doneMap:      seededDoneMap,
       fillUnlocked: false, // true once Phase 3 or 4A task starts in secondary slot
     });
   }
@@ -144,7 +205,10 @@ export function runScheduleV2(projects, settings) {
     projStates[0].projStart,
   );
 
+  // 重排起點:預設從所有專案最早的開始日;若有 startFloor(快速排程=今天)且更晚,則從它起算,
+  // 避免未來任務因相依項已凍結在過去而被回填到過去。
   let day = new Date(allProjStart);
+  if (startFloor && +startFloor > +allProjStart) day = new Date(startFloor);
   const MAX_DAYS = 1500;
 
   // 從所有專案的第一天開始找任務
@@ -175,7 +239,17 @@ export function runScheduleV2(projects, settings) {
     );
     if (!anyRemaining) break;
 
-    let capacity = hoursPerDay;
+    // 當日每個 assignee 一桶(懶初始化):桶大小 = 該人每日工時,遇到他的休假日整桶歸零,
+    // 再扣掉橫跨今天的凍結任務已佔的工時。同一天跨 while 多輪共用這份桶(容量只減不增)。
+    const dateKey = formatDateKey(day);
+    const capByBucket = {};
+    const capacityOf = (key) => {
+      if (capByBucket[key] === undefined) {
+        const base = isBlackout(day, daysOffFor(key)) ? 0 : dailyHoursFor(key);
+        capByBucket[key] = Math.max(0, base - (reservedByAssignee[dateKey]?.[key] || 0));
+      }
+      return capByBucket[key];
+    };
     let madeProgress = true; // 只要有任何任務推進，就再跑一輪；直到無任何進展才停止（fixpoint）
     let safety = 0;
 
@@ -192,7 +266,8 @@ export function runScheduleV2(projects, settings) {
           const canStart = taskCanStart(entry, projState.doneMap, projState.projStart, projState.enabledIds, blackouts, projState.svStart, projState.svEnd, projState.cpStart, projState.cpEnd);
           if (canStart === null || canStart > day) break;
           const waitEnd = entry.w > 0 ? addWorkDays(day, entry.w, []) : null;
-          projState.done.push(makeRecord(entry, day, day, waitEnd, { [formatDateKey(day)]: { h: 0, o: hoursPerDay - capacity } }));
+          const zeroKey = bucketKeyFor(entry);
+          projState.done.push(makeRecord(entry, day, day, waitEnd, { [dateKey]: { h: 0, o: dailyHoursFor(zeroKey) - capacityOf(zeroKey) } }));
           projState.doneMap[entry.id] = { end: day, waitEnd };
           projState.qIdx++;
           madeProgress = true;
@@ -265,10 +340,14 @@ export function runScheduleV2(projects, settings) {
       pool.sort(poolComparator);
 
       for (const { projState, activeTask, slot, isNew } of pool) {
-        if (capacity <= 0) break;
+        const bucketKey = bucketKeyFor(activeTask.entry);
+        const cap = capacityOf(bucketKey);
+        // 這個 assignee 今天的桶滿了就換下一個任務——不能 break(別的桶可能還有空間,
+        // 不同 assignee 要能在同一天各自平行推進)。
+        if (cap <= 0) continue;
 
-        // ns candidate: skip if insufficient capacity (fixes Bug 1 & Bug 2)
-        if (activeTask.entry.ns && capacity < activeTask.remaining) continue;
+        // ns candidate: skip if this assignee's remaining capacity can't fit the whole task
+        if (activeTask.entry.ns && cap < activeTask.remaining) continue;
 
         // formally start new tasks
         if (isNew) {
@@ -283,14 +362,13 @@ export function runScheduleV2(projects, settings) {
           }
         }
 
-        const alloc = Math.min(activeTask.remaining, capacity);
-        // 行事曆模式需要「這天實際做幾小時、從當日第幾小時開始」的明細;
-        // o = 當日已被更高優先權任務吃掉的時數,capacity 一天內只減不增,區塊天然不重疊
-        const dateKey = formatDateKey(day);
-        if (!activeTask.days[dateKey]) activeTask.days[dateKey] = { h: 0, o: hoursPerDay - capacity };
+        const alloc = Math.min(activeTask.remaining, cap);
+        // 行事曆需要「這天做幾小時、從當日第幾小時開始」的明細;o 相對「這個 assignee 的當日」
+        // 累積(同桶容量一天內只減不增,同桶區塊天然不重疊)。
+        if (!activeTask.days[dateKey]) activeTask.days[dateKey] = { h: 0, o: dailyHoursFor(bucketKey) - cap };
         activeTask.days[dateKey].h += alloc;
         activeTask.remaining -= alloc;
-        capacity -= alloc;
+        capByBucket[bucketKey] -= alloc;
 
         if (activeTask.remaining <= 0) {
           const waitEnd = activeTask.entry.w > 0 ? addWorkDays(day, activeTask.entry.w, []) : null;
@@ -452,6 +530,40 @@ function makeRecord(entry, start, end, waitEnd, days) {
     pid:     entry.pid,
     pn:      entry.pn,
     effH:    entry.hours,
+    assignee: entry.assignee ?? null, // 帶著負責人,供未來以人為軸的負載視圖分欄用
+  };
+}
+
+// 從一組任務 record + 專案問卷日期推導專案里程碑;buildResult 與 hydrateSchedule 共用。
+// records: 任務 record 陣列(需有 id / start / end);calcStartOverride 給 buildResult 傳 projStart,
+// hydrate 省略時改用最早任務 start。
+export function deriveMilestones(records, project, blackouts, calcStartOverride) {
+  let sv219End = null;
+  let earliestStart = null;
+  for (const rec of records) {
+    if (rec.id === '2.20') sv219End = rec.end;
+    if (rec.start && (!earliestStart || rec.start < earliestStart)) earliestStart = rec.start;
+  }
+
+  // earliestSurveyStart: next WD after task 2.20 (問卷開跑) ends
+  const earliestSurveyStart = sv219End ? nextWorkDay(addDays(sv219End, 1), blackouts) : null;
+
+  // earliestCampaignEnd: (surveyEnd || surveyStart+30 || earliestSurveyStart+30) + 5 WD
+  const surveyEndDate   = parseDate(project.surveyEnd);
+  const surveyStartDate = parseDate(project.surveyStart);
+  const cpBase = surveyEndDate
+    ? surveyEndDate
+    : surveyStartDate
+      ? addDays(surveyStartDate, 30)
+      : earliestSurveyStart
+        ? addDays(earliestSurveyStart, 30)
+        : null;
+  const earliestCampaignEnd = cpBase ? addWorkDays(cpBase, 5, blackouts) : null;
+
+  return {
+    eSv: earliestSurveyStart,
+    eCp: earliestCampaignEnd,
+    calcStart: calcStartOverride !== undefined ? calcStartOverride : earliestStart,
   };
 }
 
@@ -462,33 +574,8 @@ function buildResult(projStates, projects, blackouts) {
   for (const projState of projStates) {
     const pid = projState.proj.id;
     schedule[pid] = {};
-
-    let sv219End = null;
-    for (const rec of projState.done) {
-      schedule[pid][rec.id] = rec;
-      if (rec.id === '2.20') sv219End = rec.end;
-    }
-
-    // earliestSurveyStart: next WD after task 2.20 (問卷開跑) ends
-    const earliestSurveyStart = sv219End ? nextWorkDay(addDays(sv219End, 1), blackouts) : null;
-
-    // earliestCampaignEnd: (surveyEnd || surveyStart+30 || earliestSurveyStart+30) + 5 WD
-    const surveyEndDate   = parseDate(projState.proj.surveyEnd);
-    const surveyStartDate = parseDate(projState.proj.surveyStart);
-    const cpBase = surveyEndDate
-      ? surveyEndDate
-      : surveyStartDate
-        ? addDays(surveyStartDate, 30)
-        : earliestSurveyStart
-          ? addDays(earliestSurveyStart, 30)
-          : null;
-    const earliestCampaignEnd = cpBase ? addWorkDays(cpBase, 5, blackouts) : null;
-
-    milestones[pid] = {
-      eSv: earliestSurveyStart,
-      eCp: earliestCampaignEnd,
-      calcStart: projState.projStart,
-    };
+    for (const rec of projState.done) schedule[pid][rec.id] = rec;
+    milestones[pid] = deriveMilestones(projState.done, projState.proj, blackouts, projState.projStart);
   }
 
   for (const proj of projects) {

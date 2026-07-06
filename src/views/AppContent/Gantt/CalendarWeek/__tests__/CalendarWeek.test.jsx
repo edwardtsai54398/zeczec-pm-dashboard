@@ -6,7 +6,7 @@ import styles from '../CalendarWeek.module.css';
 
 // CalendarWeek 自己從 context 取排程/設定(比照 Gantt 測試),
 // 測試把 WorkspaceContext / AuthContext 換成可控假實作。
-const mockWorkspace = vi.hoisted(() => ({ projects: [], sch: {}, settings: {}, updateTaskPin: () => {} }));
+const mockWorkspace = vi.hoisted(() => ({ projects: [], sch: {}, settings: {}, applyTaskDateChange: () => {} }));
 const mockAuth = vi.hoisted(() => ({ role: 'owner' }));
 
 vi.mock('../../../../../context/WorkspaceContext.jsx', () => ({
@@ -68,14 +68,6 @@ describe('週格線與表頭', () => {
   it('今天的日期頭帶 today class', () => {
     const { container } = renderCalendar({ projects, data });
     expect(container.querySelector(dot('dayHead', 'today'))).toBeTruthy();
-  });
-
-  it('請假日欄帶 blackout class', () => {
-    // dayKey(2) 是週二,必為平日
-    const settings = { hoursPerDay: 8, blackouts: [{ id: 'b1', start: dayKey(2), end: dayKey(2) }] };
-    const { container } = renderCalendar({ projects, data, settings });
-    const columns = container.querySelectorAll(dot('dayCol'));
-    expect(columns[2].classList.contains(styles.blackout)).toBe(true);
   });
 
   it('hoursPerDay 決定格線高度:10 小時 → 700px', () => {

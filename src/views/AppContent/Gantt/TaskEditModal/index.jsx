@@ -24,6 +24,8 @@ export default function TaskEditModal({ state, projects, data, onSave, onClose }
   const [pinDateValue, setPinDateValue] = useState(projectTask?.pinnedStart || '');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  // 按「儲存」後先進入二選一:自動重排後面的任務 / 只改這一個。
+  const [choosing, setChoosing] = useState(false);
 
   const effectiveStart = scheduled?.start ? new Date(scheduled.start) : null;
   const parsedPinDate = pinEnabled && pinDateValue ? pD(pinDateValue) : null;
@@ -36,7 +38,8 @@ export default function TaskEditModal({ state, projects, data, onSave, onClose }
     parsedPinDate && effectiveStart && effectiveStart > parsedPinDate && !pinWasCausingEffectiveStart;
 
   // 寫雲端完成前不關彈窗;失敗則留住彈窗顯示錯誤。
-  const handleSave = async () => {
+  // mode: 'single'(只改這一個)| 'reschedule'(這個 + 下游一起重排)。
+  const handleSave = async (mode) => {
     setSaving(true);
     setSaveError('');
     try {
@@ -44,10 +47,11 @@ export default function TaskEditModal({ state, projects, data, onSave, onClose }
         pinnedStart: pinEnabled && pinDateValue ? pinDateValue : null,
         pinnedHours: hoursValue !== '' ? Number(hoursValue) : null,
         pinnedWait:  waitValue  !== '' ? Number(waitValue)  : null,
-      });
+      }, mode);
       onClose();
     } catch (error) {
       setSaveError(error?.message || '儲存失敗，請稍後再試');
+      setChoosing(false);
     } finally {
       setSaving(false);
     }
@@ -108,11 +112,31 @@ export default function TaskEditModal({ state, projects, data, onSave, onClose }
 
         {saveError && <div className={styles.pinWarn}>{saveError}</div>}
 
+        {choosing && (
+          <div className={styles.choiceHint}>後面的任務會受影響，要讓排程器自動往後重排嗎？</div>
+        )}
+
         <div className={styles.footer}>
-          <button className={styles.pinBtn} onClick={onClose} disabled={saving}>取消</button>
-          <button className={`${styles.pinBtn} ${styles.primary}`} onClick={handleSave} disabled={saving}>
-            {saving ? '儲存中…' : '儲存並重算'}
-          </button>
+          {!choosing ? (
+            <>
+              <button className={styles.pinBtn} onClick={onClose} disabled={saving}>取消</button>
+              <button className={`${styles.pinBtn} ${styles.primary}`}
+                      onClick={() => setChoosing(true)} disabled={saving}>
+                儲存
+              </button>
+            </>
+          ) : (
+            <>
+              <button className={styles.pinBtn} onClick={() => setChoosing(false)} disabled={saving}>返回</button>
+              <button className={styles.pinBtn} onClick={() => handleSave('single')} disabled={saving}>
+                只改這一個
+              </button>
+              <button className={`${styles.pinBtn} ${styles.primary}`}
+                      onClick={() => handleSave('reschedule')} disabled={saving}>
+                {saving ? '排程中…' : '自動重排後面'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -7,7 +7,7 @@ import calStyles from '../CalendarWeek/CalendarWeek.module.css';
 
 // Gantt 自己從 context 取 projects/排程/設定/釘選儲存(比照 Dashboard 測試),
 // 測試把 WorkspaceContext 換成可控假實作,每次 renderGantt 注入該情境的資料。
-const mockWorkspace = vi.hoisted(() => ({ projects: [], sch: {}, settings: {}, updateTaskPin: () => {} }));
+const mockWorkspace = vi.hoisted(() => ({ projects: [], sch: {}, settings: {}, applyTaskDateChange: () => {} }));
 // role 可由各測試切換:owner/editor 能訂選日期,viewer 的 double click 應無效。
 const mockAuth = vi.hoisted(() => ({ role: 'owner' }));
 
@@ -31,11 +31,11 @@ const calDot = (...keys) => '.' + keys.map((key) => calStyles[key]).join('.');
 // 設定 mock workspace 後渲染 Gantt(Gantt 不再吃 props,改吃 context)。
 // 頁面預設是行事曆模式;多數測試針對甘特視圖,故預設先點「甘特圖模式」切過去,
 // 行事曆相關測試傳 view: 'calendar' 留在預設視圖。
-function renderGantt({ projects = [], data = {}, settings = {}, updateTaskPin = () => {}, view = 'gantt' } = {}) {
+function renderGantt({ projects = [], data = {}, settings = {}, applyTaskDateChange = () => {}, view = 'gantt' } = {}) {
   mockWorkspace.projects = projects;
   mockWorkspace.sch = data;
   mockWorkspace.settings = settings;
-  mockWorkspace.updateTaskPin = updateTaskPin;
+  mockWorkspace.applyTaskDateChange = applyTaskDateChange;
   const result = render(<Gantt />);
   if (view === 'gantt') {
     // 空資料時只渲染 empty state,沒有切換鈕

@@ -95,3 +95,21 @@
   gap: 8px;
   min-height: 28px;
 }
+
+/* 任務列的勾選+文字外殼:display:contents 讓子項照舊直接參與 .phase-row 的 flex 排版,
+   版面完全不變;把指派下拉留在這個 label 外面,點下拉才不會連帶勾選/取消任務。 */
+.taskLabel { display: contents; }
+
+/* 指派負責人的下拉(僅啟用中的任務顯示),靠 .pname 的 flex:1 被推到列的最右側。 */
+.assigneeSelect {
+  flex: none;
+  max-width: 128px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--ink-2);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-family: var(--font-sans);
+  cursor: pointer;
+}

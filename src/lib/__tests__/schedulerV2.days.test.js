@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { runScheduleV2 } from '../schedulerV2.js';
-import { fmtF, isWE, isBO } from '../dateUtils.js';
+import { fmtF, isWE } from '../dateUtils.js';
 import { BT } from '../tasks.js';
 
 // days 每日分配明細:行事曆週檢視依 { 'YYYY-MM-DD': { h, o } } 畫任務區塊,
@@ -84,7 +84,8 @@ describe('days 明細:單一專案', () => {
     }
   });
 
-  it('有工時分配的日子不會是週末或請假日', () => {
+  it('有工時分配的日子不會是週末(M1:請假日已停用,不再避開全域 blackout)', () => {
+    // 即使 settings 帶 blackouts 也被忽略;只保證不落在週末。
     const vacation = [{ id: 'v', start: '2026-06-10', end: '2026-06-16' }];
     const { sch } = runScheduleV2([p], { hoursPerDay: 8, blackouts: vacation });
     for (const task of Object.values(sch['p'])) {
@@ -93,7 +94,6 @@ describe('days 明細:單一專案', () => {
       for (const dateKey of Object.keys(task.days)) {
         const date = new Date(dateKey + 'T00:00:00');
         expect(isWE(date)).toBe(false);
-        expect(isBO(date, vacation)).toBe(false);
       }
     }
   });

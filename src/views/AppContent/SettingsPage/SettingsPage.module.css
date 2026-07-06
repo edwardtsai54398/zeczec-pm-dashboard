@@ -169,14 +169,16 @@
   flex-direction: column;
 }
 
+/* 每個成員項(單列);分隔線放在項目層 */
+.memberItem { border-bottom: 1px solid var(--border); }
+.memberItem:last-child { border-bottom: none; }
+
 .memberRow {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 10px 0;
-  border-bottom: 1px solid var(--border);
 }
-.memberRow:last-child { border-bottom: none; }
 
 /* 名字縮寫小 avatar */
 .memberAvatar {
@@ -252,6 +254,21 @@
   color: var(--ink-2);
 }
 
+/* 唯讀的可用性欄:每日工時 + 休假天數(工時/休假只能各人在個人化設定改自己的) */
+.memberAvail {
+  flex: none;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.memberDaysOff {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
 /* 踢除按鈕 */
 .removeBtn {
   flex: none;
@@ -277,4 +294,10 @@
 .removeSpacer {
   flex: none;
   width: 32px;
+}
+
+/* 「每日工時／休假」(MyAvailabilityEditor)休假日區塊:欄位直排 */
+.availDaysOff {
+  display: flex;
+  flex-direction: column;
 }

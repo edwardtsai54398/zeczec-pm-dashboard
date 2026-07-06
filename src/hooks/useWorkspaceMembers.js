@@ -70,3 +70,15 @@ export async function updateWorkspaceMemberRole(workspaceId, userId, role) {
   });
   if (error) throw new Error(error.message);
 }
+
+// 設定「自己的」可用性(每日工時 + 個人休假):存進自己那筆成員 settings jsonb。
+// 可用性是描述本人的資料,不綁角色——任何成員都能改自己的,但誰都不能改別人的,
+// 所以 RPC 內鎖定 auth.uid() 那列(不再收 userId)。dailyHours 傳 null = 回退預設;
+// daysOff 是範圍陣列 [{id,name,start,end}]。失敗訊息由 RPC 拋出。
+export async function updateMyAvailability(workspaceId, dailyHours, daysOff) {
+  const { error } = await supabase.rpc('update_workspace_member_settings', {
+    p_workspace_id: workspaceId,
+    p_settings: { daily_hours: dailyHours, days_off: daysOff },
+  });
+  if (error) throw new Error(error.message);
+}

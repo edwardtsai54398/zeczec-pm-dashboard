@@ -104,8 +104,10 @@ begin
   -- 一人在一工作區只一筆:已存在則更新角色。
   -- p_role 是 text 參數,role 欄位是 member_role enum;plpgsql 內 text→enum 不會隱式轉型
   -- (client 端 .insert() 傳的是 unknown 字面值才會自動吃),所以這裡必須顯式 ::member_role。
-  insert into workspace_members (workspace_id, user_id, role)
-  values (p_workspace_id, v_user_id, p_role::member_role)
+  -- settings 種每日工時預設(8h),讓新成員一加入就有明確工時(對應 constants.js 的
+  -- DEFAULT_MEMBER_SETTINGS);on conflict 只更新角色,保留既有成員自訂過的 settings。
+  insert into workspace_members (workspace_id, user_id, role, settings)
+  values (p_workspace_id, v_user_id, p_role::member_role, '{"daily_hours": 8, "days_off": []}'::jsonb)
   on conflict (workspace_id, user_id)
   do update set role = excluded.role;
 end;
@@ -235,17 +237,29 @@ create policy "owner updates own membership"
 --   * 改角色 / 踢除是寫入,寫入端角色強制的 RLS 還沒建(見上註),先用 definer 函式
 --     在函式內自驗 owner,擋掉非 owner 直接打 API。
 
--- 5-1. 列出某工作區的全部成員(含 display_name / email / role)。
+-- 5-0. 每人設定(M1 資料地基):用單一 settings jsonb 存,方便日後擴充(比照 workspaces.settings)。
+-- 目前放 { daily_hours: 覆寫每日工時(缺=用工作區預設), days_off: 休假範圍 [{id,name,start,end}] }。
+-- 全域 blackout 已移除,改由每人各自設定。
+-- (M1 開發中一度用 daily_hours/days_off 兩個獨立欄,若已跑過那版,先清掉再改用 settings)
+alter table workspace_members drop column if exists daily_hours;
+alter table workspace_members drop column if exists days_off;
+alter table workspace_members add column if not exists settings jsonb not null default '{}'::jsonb;
+
+-- 5-1. 列出某工作區的全部成員(含 display_name / email / role / settings)。
 -- 守門用 is_workspace_member:任何成員都讀得到清單(對應前端「所有成員唯讀」),
--- 只有「改角色 / 踢除」控制項才另外限 owner。
+-- 只有「改角色 / 踢除」控制項才另外限 owner;可用性(工時 / 休假)改成人人只能改自己(見 5-4)。
+-- 回傳 TABLE 欄位變了,create or replace 不能改回傳型別,必須先 drop 再建。
+drop function if exists public.list_workspace_members(uuid);
 create or replace function public.list_workspace_members(p_workspace_id uuid)
-returns table (user_id uuid, display_name text, email text, role member_role)
+returns table (user_id uuid, display_name text, email text, role member_role,
+               settings jsonb)
 language sql
 security definer
 set search_path = public
 stable
 as $$
-  select member.user_id, profile.display_name, profile.email, member.role
+  select member.user_id, profile.display_name, profile.email, member.role,
+         member.settings
   from workspace_members member
   join profiles profile on profile.id = member.user_id
   where member.workspace_id = p_workspace_id
@@ -316,3 +330,34 @@ end;
 $$;
 
 grant execute on function public.update_workspace_member_role(uuid, uuid, text) to authenticated;
+
+-- 5-4. 更新「自己的」成員 settings(合併寫入,不覆蓋其他 key)。
+-- 可用性(每日工時 / 休假)是描述本人的資料,不是共享計畫的變更,故不綁角色:
+--   任何成員(含 viewer)都能改自己的,但誰都不能改別人的——連 owner 也不行。
+-- 因此拿掉 p_user_id 參數,直接鎖定 auth.uid() 那列(結構上就無法指向別人),
+-- 守門只需 is_workspace_member(確認呼叫者確實是這個工作區的成員)。
+-- 回傳型別沒變但參數個數變了,create or replace 不能改簽章,先 drop 舊的三參數版。
+drop function if exists public.update_workspace_member_settings(uuid, uuid, jsonb);
+create or replace function public.update_workspace_member_settings(
+  p_workspace_id uuid,
+  p_settings jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_workspace_member(p_workspace_id) then
+    raise exception '你不是這個工作區的成員';
+  end if;
+
+  -- 合併(||):只蓋傳進來的 key,保留 settings 內其他既有欄位。只改自己那列。
+  update workspace_members
+  set settings = coalesce(settings, '{}'::jsonb) || coalesce(p_settings, '{}'::jsonb)
+  where workspace_id = p_workspace_id
+    and user_id = auth.uid();
+end;
+$$;
+
+grant execute on function public.update_workspace_member_settings(uuid, jsonb) to authenticated;
