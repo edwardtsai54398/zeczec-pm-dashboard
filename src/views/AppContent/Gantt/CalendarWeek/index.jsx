@@ -294,63 +294,67 @@ export default function CalendarWeek({ selectedProjects, onToggleMode }) {
           </div>
         )}
 
-        <div className={styles.headerRow}>
-          <div className={styles.gutterCell} />
-          <div className={styles.days}>
-            {weekDays.map(day => (
-              <div key={day.key}
-                className={`${styles.dayHead}${day.isWeekend ? ` ${styles.weekend}` : ''}${day.isToday ? ` ${styles.today}` : ''}`}>
-                <span className={styles.dayName}>週{WEEK[day.dayOfWeek]}</span>
-                <span className={styles.dayNum}>{day.date.getDate()}</span>
+        {/* 表頭三列與小時格線同放一個垂直捲動容器(比照甘特視圖):捲軸一併縮減內寬,
+            7 欄的欄線在表頭與格線之間永遠對齊。表頭整組 sticky 固定在頂,格線在其下捲過。 */}
+        <div className={styles.scrollArea}>
+          <div className={styles.stickyHead}>
+            <div className={styles.headerRow}>
+              <div className={styles.gutterCell} />
+              <div className={styles.days}>
+                {weekDays.map(day => (
+                  <div key={day.key}
+                    className={`${styles.dayHead}${day.isWeekend ? ` ${styles.weekend}` : ''}${day.isToday ? ` ${styles.today}` : ''}`}>
+                    <span className={styles.dayName}>週{WEEK[day.dayOfWeek]}</span>
+                    <span className={styles.dayNum}>{day.date.getDate()}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
 
-        {hasChips && (
-          <div className={styles.allDayRow}>
-            <div className={styles.gutterCell} />
-            <div className={styles.days}>
-              {weekDays.map(day => (
-                <div key={day.key}
-                  className={`${styles.allDayCell}${day.isWeekend ? ` ${styles.weekend}` : ''}`}>
-                  {allDayChips[day.key].map(({ task, project, tone, memberId, memberColor }) => (
-                    <div key={`${project.id}-${task.id}`}
-                      className={`${styles.chip} ${styles[tone]}`}
-                      style={{ borderLeft: `3px solid ${memberColor}` }}
-                      onMouseEnter={(e) => handleBlockEnter(e, task, project, null, memberId != null ? memberNameOf(memberId) : null)}
-                      onMouseLeave={handleLeave}
-                      onDoubleClick={(e) => handleDblClick(e, task, project)}>
-                      {task.n}
+            {hasChips && (
+              <div className={styles.allDayRow}>
+                <div className={styles.gutterCell} />
+                <div className={styles.days}>
+                  {weekDays.map(day => (
+                    <div key={day.key}
+                      className={`${styles.allDayCell}${day.isWeekend ? ` ${styles.weekend}` : ''}`}>
+                      {allDayChips[day.key].map(({ task, project, tone, memberId, memberColor }) => (
+                        <div key={`${project.id}-${task.id}`}
+                          className={`${styles.chip} ${styles[tone]}`}
+                          style={{ borderLeft: `3px solid ${memberColor}` }}
+                          onMouseEnter={(e) => handleBlockEnter(e, task, project, null, memberId != null ? memberNameOf(memberId) : null)}
+                          onMouseLeave={handleLeave}
+                          onDoubleClick={(e) => handleDblClick(e, task, project)}>
+                          {task.n}
+                        </div>
+                      ))}
                     </div>
                   ))}
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+              </div>
+            )}
 
-        {hasPeriodBars && (
-          <div className={styles.periodRow}>
-            <div className={styles.gutterCell} />
-            <div className={styles.periodTrack}>
-              {weekPeriodBars.map(({ bar, startOffset, endOffset }, index) => (
-                <div key={index}
-                  className={`${styles.periodBar} ${styles[bar.tone]}`}
-                  style={{
-                    left: `${(startOffset / 7) * 100}%`,
-                    width: `${((endOffset - startOffset + 1) / 7) * 100}%`,
-                    ...(periodIsMulti ? { top: periodPad + bar.lane * (periodBarHeight + periodGap), height: periodBarHeight, bottom: 'auto' } : {}),
-                  }}
-                  onMouseEnter={(e) => handlePeriodEnter(e, bar)}
-                  onMouseLeave={handleLeave}
-                />
-              ))}
-            </div>
+            {hasPeriodBars && (
+              <div className={styles.periodRow}>
+                <div className={styles.gutterCell} />
+                <div className={styles.periodTrack}>
+                  {weekPeriodBars.map(({ bar, startOffset, endOffset }, index) => (
+                    <div key={index}
+                      className={`${styles.periodBar} ${styles[bar.tone]}`}
+                      style={{
+                        left: `${(startOffset / 7) * 100}%`,
+                        width: `${((endOffset - startOffset + 1) / 7) * 100}%`,
+                        ...(periodIsMulti ? { top: periodPad + bar.lane * (periodBarHeight + periodGap), height: periodBarHeight, bottom: 'auto' } : {}),
+                      }}
+                      onMouseEnter={(e) => handlePeriodEnter(e, bar)}
+                      onMouseLeave={handleLeave}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        )}
 
-        <div className={styles.body}>
           <div className={styles.bodyGrid} style={{ height: ROWS * HOUR_H, '--hour-h': `${HOUR_H}px` }}>
             <div className={styles.gutter}>
               {HOUR_ROWS.map(hour => (

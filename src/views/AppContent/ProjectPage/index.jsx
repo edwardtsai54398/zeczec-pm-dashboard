@@ -203,6 +203,19 @@ function ProjectDetail({ p, onUpdate, miles, members, dirty, onSave, onArchive, 
   const [scheduling, setScheduling] = useState(false);
   const [confirmSchedule, setConfirmSchedule] = useState(false);
 
+  // 使用者目前希望系統自動整理:存檔成功後自動快速排程一次。
+  // 用 flag + effect 延到「projects 更新到最新版本」之後才排——若直接串在 onSave 後面,
+  // quickSchedule 會拿到存檔前的舊版號/舊資料,重排剛存的那張會被樂觀鎖擋掉。
+  const [pendingAutoSchedule, setPendingAutoSchedule] = useState(false);
+  useEffect(() => {
+    if (!pendingAutoSchedule) return;
+    setPendingAutoSchedule(false);
+    setScheduling(true);
+    quickSchedule()
+      .catch((e) => console.error("自動快速排程失敗", e))
+      .finally(() => setScheduling(false));
+  }, [pendingAutoSchedule, quickSchedule]);
+
   const enabledCount = (p.tasks || []).filter((t) => t.enabled).length;
   // 未儲存/沒啟動日/沒勾任務時不能排;dirty 時要先存(排程跑的是雲端已存的資料,不是草稿)。
   const scheduleReason = !p.id ? "請先儲存專案"
@@ -223,7 +236,11 @@ function ProjectDetail({ p, onUpdate, miles, members, dirty, onSave, onArchive, 
   const handleSave = async () => {
     setSaving(true);
     setSaveErr("");
-    try { await onSave(); }
+    try {
+      await onSave();
+      // 使用者目前希望系統自動整理:存檔成功才觸發自動快速排程(交給上面的 effect 執行)。
+      setPendingAutoSchedule(true);
+    }
     catch (e) { setSaveErr(e?.message || "儲存失敗，請稍後再試"); }
     finally { setSaving(false); }
   };

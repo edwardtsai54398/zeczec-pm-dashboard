@@ -25,9 +25,11 @@ export function useReflowPrompt() {
     const project = projects.find((p) => p.id === pid);
     const hasDownstream = project && collectDownstream(project, taskId).size > 1;
     if (!hasDownstream) return;
-    if (timerRef.current) clearTimeout(timerRef.current);
-    setPrompt({ pid, taskId, changes });
-    timerRef.current = setTimeout(() => setPrompt(null), 8000); // 逾時自動關,不打擾
+    // 使用者目前希望系統自動整理:有下游時不再跳 ReflowPrompt 問要不要重排,直接幫忙重排後面。
+    // if (timerRef.current) clearTimeout(timerRef.current);
+    // setPrompt({ pid, taskId, changes });
+    // timerRef.current = setTimeout(() => setPrompt(null), 8000); // 逾時自動關,不打擾
+    await applyTaskDateChange(pid, taskId, changes, 'reschedule');
   }, [applyTaskDateChange, projects]);
 
   const reschedule = useCallback(async () => {

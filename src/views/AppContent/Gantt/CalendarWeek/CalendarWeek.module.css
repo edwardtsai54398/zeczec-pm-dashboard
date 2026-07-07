@@ -162,7 +162,12 @@
 
 /* 小時格線主體:每 var(--hour-h) 一條格線用背景漸層畫,不做逐小時 DOM。
    --hour-h 由 index.jsx 用 HOUR_H 常數 inline 設在 .bodyGrid,JS 與 CSS 共用同一個列高、不會走鐘。 */
-.body { flex: 1; overflow-y: auto; min-height: 0; }
+/* 單一垂直捲動容器:表頭列與小時格線同在此捲動,捲軸一併縮減內寬,
+   7 欄的欄線在表頭與格線之間永遠對齊(比照甘特視圖 .scroll 同容器捲動 + sticky 表頭)。 */
+.scrollArea { flex: 1; overflow-y: auto; min-height: 0; }
+/* 表頭三列(週表頭 / 全天列 / 期間帶)整組固定在頂,格線在其下捲過。
+   z-index 需高於拖拉中的任務塊(index.jsx 用到 20),讓區塊捲/拖到頂時被表頭蓋住而非穿出。 */
+.stickyHead { position: sticky; top: 0; z-index: 25; background: white; }
 .gutter {
   position: relative;
   border-right: 1px solid var(--border);
