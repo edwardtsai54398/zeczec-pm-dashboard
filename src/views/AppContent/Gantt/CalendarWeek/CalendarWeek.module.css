@@ -198,7 +198,7 @@
     linear-gradient(rgba(245,210,181,.15), rgba(245,210,181,.15));
 }
 
-/* 任務區塊:top/height 由 JS 依「當日分配小時 × 70px」計算 */
+/* 任務區塊:top/height 由 JS 依「當日分配小時 × HOUR_H(52px)」計算(見 index.jsx) */
 .block {
   position: absolute; left: 3px; right: 3px;
   border-radius: 6px; padding: 4px 8px;
@@ -207,6 +207,14 @@
   overflow: hidden; cursor: default; transition: transform .12s;
 }
 .block:hover { transform: translateY(-1px); z-index: 5; }
+/* 可編輯(有 editGantt 權限):拖本體改開始時間、拖底部把手改時長 */
+.editable { cursor: grab; touch-action: none; }
+.editable:active { cursor: grabbing; }
+.resizeHandle {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: 7px; cursor: ns-resize; z-index: 6;
+  touch-action: none;
+}
 .block.lavender { background: var(--t-lavender); color: var(--t-lavender-ink); box-shadow: inset 0 0 0 1px #8B85D6; }
 .block.lime     { background: var(--t-lime);     color: var(--t-lime-ink);     box-shadow: inset 0 0 0 1px #B8C95C; }
 .block.peach    { background: var(--t-peach);    color: var(--t-peach-ink);    box-shadow: inset 0 0 0 1px #E29A6A; }

@@ -1,0 +1,32 @@
+/* ReflowPrompt(index.jsx)的 scoped 樣式:畫面底部置中的小提示條(問要不要重排下游)。 */
+.toast {
+  position: fixed; left: 50%; bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 320;
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px 10px 16px;
+  background: var(--ink); color: white;
+  border-radius: 999px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.28);
+  font-size: 13px;
+  animation: reflowIn .16s ease-out;
+}
+.icon { font-size: 16px; opacity: .8; }
+.text { white-space: nowrap; }
+.dismiss {
+  padding: 6px 12px; border-radius: 999px;
+  background: transparent; border: none; cursor: pointer;
+  color: rgba(255,255,255,.7); font-size: 13px;
+}
+.dismiss:hover { color: white; }
+.reschedule {
+  padding: 6px 14px; border-radius: 999px;
+  background: var(--accent); color: var(--accent-ink);
+  border: none; cursor: pointer; font-size: 13px; font-weight: 600;
+}
+.reschedule:hover { filter: brightness(1.05); }
+
+@keyframes reflowIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}

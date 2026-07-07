@@ -6,6 +6,7 @@ import { useAuthContext } from '../../../../context/AuthContext.jsx';
 import { useWorkspaceMembers } from '../../../../hooks/useWorkspaceMembers.js';
 import { usePermissions } from '../../../../hooks/usePermissions.js';
 import TaskEditModal from '../TaskEditModal/index.jsx';
+import { useReflowPrompt } from '../useReflowPrompt.jsx';
 import { toneKey, buildPeriodBars, assignLanes, orderedPhaseKeys, bucketFor } from '../utils.js';
 import styles from './GanttView.module.css';
 
@@ -132,9 +133,12 @@ function groupByPhase(records, members, ownerId, memberIdSet) {
 
 export default function GanttView({ selectedProjects, onToggleMode }) {
   // 資料層直接從 context 取(比照 Dashboard / KOLPage);篩選 state 由 Gantt 容器持有。
-  const { projects, sch: data, applyTaskDateChange } = useWorkspace();
+  const { projects, sch: data } = useWorkspace();
   const { can } = usePermissions();
   const canEdit = can('editGantt'); // viewer 不能訂選任務日期(double click 無效)
+
+  // 彈窗存檔走「先套用再問」:先寫只改這一個,再問要不要重排下游(與行事曆共用同一套)。
+  const { applyThenAsk, promptElement } = useReflowPrompt();
 
   // 成員清單在「用到的這層」自取(比照 Dashboard),不從上層 props 串下來。
   const { workspaceId } = useAuthContext();
@@ -615,10 +619,12 @@ export default function GanttView({ selectedProjects, onToggleMode }) {
           state={pinState}
           projects={projects}
           data={data}
-          onSave={applyTaskDateChange}
+          onSave={applyThenAsk}
           onClose={() => setPinState(null)}
         />
       )}
+
+      {promptElement}
     </>
   );
 }

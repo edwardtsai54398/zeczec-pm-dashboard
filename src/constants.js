@@ -53,6 +53,14 @@ export const D_SETTINGS = {
   hoursPerDay: 8,
 };
 
+// 行事曆時間軸錨點(view / context / 換算工具共用,避免各處各寫一份走鐘)。
+// GRID_*：格線畫的真實時鐘範圍(上午 8 點～午夜)。
+// SCHEDULE_START_HOUR：排程輸出的日內位移 o=0 對應的時鐘落點(o 以此為第 0 小時)。
+// 手動指定的開始時鐘 ↔ o 換算:o(小時) = 開始時鐘 − SCHEDULE_START_HOUR。
+export const GRID_START_HOUR = 8;
+export const GRID_END_HOUR = 24;
+export const SCHEDULE_START_HOUR = 10;
+
 // 每位使用者各自的 UI 偏好(貓)單獨存一個 key,與 workspace 共用的 cfpm4(專案+排程設定)分開。
 export const PREFERENCE_KEY = "preference";
 

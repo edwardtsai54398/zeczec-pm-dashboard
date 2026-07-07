@@ -1,24 +1,25 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { addD, dBt, fmt, fmtF, pD } from '../../../../lib/dateUtils.js';
+import { GRID_START_HOUR, GRID_END_HOUR, SCHEDULE_START_HOUR } from '../../../../constants.js';
 import { WEEK } from '../../shared.js';
 import { useWorkspace } from '../../../../context/WorkspaceContext.jsx';
 import { useAuthContext } from '../../../../context/AuthContext.jsx';
 import { useWorkspaceMembers } from '../../../../hooks/useWorkspaceMembers.js';
 import { usePermissions } from '../../../../hooks/usePermissions.js';
 import TaskEditModal from '../TaskEditModal/index.jsx';
+import { useReflowPrompt } from '../useReflowPrompt.jsx';
+import { useCalendarDrag } from './useCalendarDrag.js';
 import {
   toneKey, buildPeriodBars, sunday,
   bucketFor, buildMemberColors, memberColorOf, layoutDayColumns, hourLabel,
 } from '../utils.js';
 import styles from './CalendarWeek.module.css';
 
-// 時間軸寫死真實時鐘:上午 8 點到午夜(24 點),每小時一列。
+// 時間軸寫死真實時鐘:上午 8 點到午夜(24 點),每小時一列(HOUR_H 像素)。
 // 自動排程輸出的 offset(該成員當日已用工時數)以 SCHEDULE_START_HOUR 為第 0 小時的落點,
 // 所以 o=0 的任務畫在 10:00、而 8~9 點是空的早晨。這是純顯示層位移,排程器不知道幾點上班。
+// GRID_*/SCHEDULE_START_HOUR 從 constants 共用(拖拉換算、彈窗也用同一套),HOUR_H 為此視圖專屬像素。
 const HOUR_H = 52;
-const GRID_START_HOUR = 8;
-const GRID_END_HOUR = 24;
-const SCHEDULE_START_HOUR = 10;
 const START_ROWS = SCHEDULE_START_HOUR - GRID_START_HOUR; // 排程起點在格線上的列位移
 const ROWS = GRID_END_HOUR - GRID_START_HOUR;
 const HOUR_ROWS = Array.from({ length: ROWS }, (_, i) => GRID_START_HOUR + i);
@@ -37,9 +38,14 @@ function readVisibleMembers(workspaceId, currentUserId) {
 
 export default function CalendarWeek({ selectedProjects, onToggleMode }) {
   // 資料層直接從 context 取(比照 GanttView);篩選 state 由 Gantt 容器持有。
-  const { projects, sch: data, applyTaskDateChange } = useWorkspace();
+  const { projects, sch: data } = useWorkspace();
   const { can } = usePermissions();
-  const canEdit = can('editGantt'); // viewer 不能訂選任務日期(double click 無效)
+  const canEdit = can('editGantt'); // viewer 不能訂選/拖拉任務(double click、拖拉皆無效)
+
+  // 「先套用再問」:拖拉/縮放/彈窗存檔都走 applyThenAsk(先寫只改這一個,再問要不要重排下游)。
+  const { applyThenAsk, promptElement } = useReflowPrompt();
+  const daysAreaRef = useRef(null); // 量欄寬,把水平拖拉像素換成「第幾天」
+  const { drag, onPointerDown } = useCalendarDrag({ hourH: HOUR_H, daysAreaRef, canEdit, onCommit: applyThenAsk });
 
   // 成員相關狀態全在這層自持(不從容器 props 傳下來):清單、分桶、配色、顯示開關。
   const { workspaceId, session } = useAuthContext();
@@ -353,28 +359,44 @@ export default function CalendarWeek({ selectedProjects, onToggleMode }) {
                 </div>
               ))}
             </div>
-            <div className={styles.daysArea}>
+            <div className={styles.daysArea} ref={daysAreaRef}>
               {weekDays.map(day => (
                 <div key={day.key}
                   className={`${styles.dayCol}${day.isWeekend ? ` ${styles.weekend}` : ''}${day.isToday ? ` ${styles.today}` : ''}`}>
-                  {dayBlocks[day.key].map(({ task, project, tone, memberId, memberColor, hours, offset, col, cols }) => (
-                    <div key={`${project.id}-${task.id}`}
-                      className={`${styles.block} ${styles[tone]}`}
-                      style={{
-                        top: (START_ROWS + offset) * HOUR_H + 1,
-                        height: Math.max(hours * HOUR_H - 2, 16),
-                        left: `calc(${(col * 100) / cols}% + 3px)`,
-                        width: `calc(${100 / cols}% - 6px)`,
-                        right: 'auto',
-                      }}
-                      onMouseEnter={(e) => handleBlockEnter(e, task, project, hours, memberId != null ? memberNameOf(memberId) : null)}
-                      onMouseLeave={handleLeave}
-                      onDoubleClick={(e) => handleDblClick(e, task, project)}>
-                      <span className={styles.memberStripe} style={{ background: memberColor }} />
-                      <span className={styles.blockName}>{task.n}</span>
-                      <span className={styles.blockHrs}>{hours}h</span>
-                    </div>
-                  ))}
+                  {dayBlocks[day.key].map(({ task, project, tone, memberId, memberColor, hours, offset, col, cols }) => {
+                    const blockKey = `${project.id}-${task.id}`;
+                    const isDragging = drag?.key === blockKey;
+                    const baseHeight = Math.max(hours * HOUR_H - 2, 16);
+                    // 拖拉中即時預覽:移動用 translate 跟著游標、縮放即時加高;放手才真的寫入 DB。
+                    const dragStyle = !isDragging ? null
+                      : drag.mode === 'move'
+                        ? { transform: `translate(${drag.dx}px, ${drag.dy}px)`, opacity: 0.85, zIndex: 20, transition: 'none' }
+                        : { height: Math.max(baseHeight + drag.dy, 16), zIndex: 20, transition: 'none' };
+                    return (
+                      <div key={blockKey}
+                        className={`${styles.block} ${styles[tone]}${canEdit ? ` ${styles.editable}` : ''}`}
+                        style={{
+                          top: (START_ROWS + offset) * HOUR_H + 1,
+                          height: baseHeight,
+                          left: `calc(${(col * 100) / cols}% + 3px)`,
+                          width: `calc(${100 / cols}% - 6px)`,
+                          right: 'auto',
+                          ...dragStyle,
+                        }}
+                        onPointerDown={(e) => { setTip(null); onPointerDown(e, 'move', task, project); }}
+                        onMouseEnter={(e) => handleBlockEnter(e, task, project, hours, memberId != null ? memberNameOf(memberId) : null)}
+                        onMouseLeave={handleLeave}
+                        onDoubleClick={(e) => handleDblClick(e, task, project)}>
+                        <span className={styles.memberStripe} style={{ background: memberColor }} />
+                        <span className={styles.blockName}>{task.n}</span>
+                        <span className={styles.blockHrs}>{hours}h</span>
+                        {canEdit && (
+                          <span className={styles.resizeHandle}
+                            onPointerDown={(e) => { setTip(null); onPointerDown(e, 'resize', task, project); }} />
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               ))}
               {milestones.map((milestone, index) => (
@@ -403,7 +425,7 @@ export default function CalendarWeek({ selectedProjects, onToggleMode }) {
         </div>
       </div>
 
-      {tip && !pinState && (
+      {tip && !pinState && !drag && (
         <div className={styles.tooltip} style={{ left: tip.x, top: tip.y }}>
           {tip.periodBar ? (
             <>
@@ -429,10 +451,12 @@ export default function CalendarWeek({ selectedProjects, onToggleMode }) {
           state={pinState}
           projects={projects}
           data={data}
-          onSave={applyTaskDateChange}
+          onSave={applyThenAsk}
           onClose={() => setPinState(null)}
         />
       )}
+
+      {promptElement}
     </>
   );
 }

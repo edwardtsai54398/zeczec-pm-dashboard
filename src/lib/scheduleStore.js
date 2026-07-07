@@ -171,23 +171,28 @@ export function collectFrozen(projects, predicate) {
 // 鋪在工作日上(避開他的休假日),算出 end/days/waitEnd。不看其他任務、不管容量衝突
 // (使用者已選擇只動這一個),回傳可直接寫入 schedule 的字串形狀 entry。
 // availability = { dailyHours, daysOff };省略時退回工作區每日工時、無休假(＝改版前行為)。
-export function layoutSingleTask(startDate, hours, wait, settings, availability) {
+// startOffsetHours = 手動排定的日內開始位移(o,以 SCHEDULE_START_HOUR 為第 0 小時),
+// 只套用在第一天;後續天一律從頂端(o=0)接續。省略＝0(改版前行為,畫在 10:00)。
+export function layoutSingleTask(startDate, hours, wait, settings, availability, startOffsetHours = 0) {
   const hoursPerDay = availability?.dailyHours ?? (settings?.hoursPerDay || 8);
   const blackouts = availability?.daysOff ?? [];
   const startDay = nextWorkDay(startDate, blackouts);
   const days = {};
   let end = startDay;
   if (hours <= 0) {
-    days[formatDateKey(startDay)] = { h: 0, o: 0 };
+    // 0 工時任務畫成全天 chip,o 不影響顯示,仍記著位移保持形狀一致。
+    days[formatDateKey(startDay)] = { h: 0, o: startOffsetHours };
   } else {
     let day = startDay;
     let remaining = hours;
+    let isFirst = true;
     while (remaining > 0) {
       if (!isWeekend(day) && !isBlackout(day, blackouts)) {
         const h = Math.min(remaining, hoursPerDay);
-        days[formatDateKey(day)] = { h, o: 0 };
+        days[formatDateKey(day)] = { h, o: isFirst ? startOffsetHours : 0 };
         remaining -= h;
         end = day;
+        isFirst = false;
       }
       if (remaining > 0) day = addDays(day, 1);
     }

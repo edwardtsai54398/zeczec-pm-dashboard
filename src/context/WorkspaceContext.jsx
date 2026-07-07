@@ -5,7 +5,7 @@ import {
 } from '../lib/scheduleStore.js';
 import { BT } from '../lib/tasks.js';
 import { pD, fmtF } from '../lib/dateUtils.js';
-import { D_SETTINGS } from '../constants.js';
+import { D_SETTINGS, SCHEDULE_START_HOUR } from '../constants.js';
 import { usePersistence } from '../hooks/usePersistence.js';
 import { useCloudProjects } from '../hooks/useCloudProjects.js';
 import { useCloudWorkspaceSettings } from '../hooks/useCloudWorkspaceSettings.js';
@@ -90,15 +90,22 @@ export function WorkspaceProvider({ children }) {
       const target = projects.find((p) => p.id === pid);
       if (!target) return;
 
-      // pin/工時/等待覆寫先寫進 tasks(記住),排程另外落地。
+      const ownerId = members.find((member) => member.role === 'owner')?.user_id ?? null;
+
+      // pin(開始日/時鐘/工時/等待)與負責人覆寫先寫進 tasks(記住),排程另外落地。
+      // 用 key 是否存在(`in`)判斷「這次有沒有要改這個欄位」,讓拖拉能只送部分欄位、不誤刪其他釘選;
+      // 值為 null/空 = 明確清掉。assignee 等於 owner 就刪(未指派＝owner,比照 ProjectPage)。
       const nextTasks = (target.tasks || []).map((t) => {
         if (t.id !== taskId) return t;
         const nt = { ...t };
-        if (changes.pinnedStart) nt.pinnedStart = changes.pinnedStart; else delete nt.pinnedStart;
-        if (changes.pinnedHours != null) nt.pinnedHours = changes.pinnedHours; else delete nt.pinnedHours;
-        if (changes.pinnedWait != null) nt.pinnedWait = changes.pinnedWait; else delete nt.pinnedWait;
+        if ('pinnedStart' in changes) { if (changes.pinnedStart) nt.pinnedStart = changes.pinnedStart; else delete nt.pinnedStart; }
+        if ('pinnedStartMin' in changes) { if (changes.pinnedStartMin != null) nt.pinnedStartMin = changes.pinnedStartMin; else delete nt.pinnedStartMin; }
+        if ('pinnedHours' in changes) { if (changes.pinnedHours != null) nt.pinnedHours = changes.pinnedHours; else delete nt.pinnedHours; }
+        if ('pinnedWait' in changes) { if (changes.pinnedWait != null) nt.pinnedWait = changes.pinnedWait; else delete nt.pinnedWait; }
+        if ('assignee' in changes) { if (changes.assignee && changes.assignee !== ownerId) nt.assignee = changes.assignee; else delete nt.assignee; }
         return nt;
       });
+      const editedTask = nextTasks.find((t) => t.id === taskId);
 
       let next;
       if (mode === 'single') {
@@ -111,9 +118,13 @@ export function WorkspaceProvider({ children }) {
             : (cur?.hours != null ? cur.hours : (base?.h || 0));
           const wait = changes.pinnedWait != null ? changes.pinnedWait
             : (cur?.w != null ? cur.w : (base?.w || 0));
+          // 日內開始位移:有釘選時鐘就用它,否則沿用目前排程第一天的 o(避免重算把時鐘打回 10:00)。
+          const startOffsetHours = editedTask?.pinnedStartMin != null
+            ? editedTask.pinnedStartMin / 60 - SCHEDULE_START_HOUR
+            : (cur?.days?.[cur.start]?.o ?? 0);
           // 單人 placer:用該任務 assignee(未指派 → owner)的每日工時 + 休假日鋪這一個任務。
           const availability = availabilityForTask(members, settings, nextTasks, taskId);
-          schedule[taskId] = layoutSingleTask(pD(startStr), hours, wait, settings, availability);
+          schedule[taskId] = layoutSingleTask(pD(startStr), hours, wait, settings, availability, startOffsetHours);
         }
         next = { ...target, tasks: nextTasks, schedule };
       } else {
@@ -125,7 +136,20 @@ export function WorkspaceProvider({ children }) {
           (project.id !== pid ? true : !reflow.has(tId)),
         );
         const { sch: fresh } = runScheduleV2(runProjects, settings, { frozen, members });
-        next = { ...editedProject, schedule: freezeSchedule(fresh[pid] || {}) };
+        const schedule = freezeSchedule(fresh[pid] || {});
+        // runScheduleV2 重排時不認時鐘,會把 o 打回 packing 值;把「被改任務本身」第一天的 o
+        // 覆寫回它的釘選時鐘,讓使用者手動排定的那一格保留時間(下游被重排就隨排程器)。
+        if (editedTask?.pinnedStartMin != null && schedule[taskId]?.days) {
+          const rootOffset = editedTask.pinnedStartMin / 60 - SCHEDULE_START_HOUR;
+          const firstKey = schedule[taskId].start;
+          if (schedule[taskId].days[firstKey]) {
+            schedule[taskId] = {
+              ...schedule[taskId],
+              days: { ...schedule[taskId].days, [firstKey]: { ...schedule[taskId].days[firstKey], o: rootOffset } },
+            };
+          }
+        }
+        next = { ...editedProject, schedule };
       }
 
       const saved = await saveProjectToCloud(next);

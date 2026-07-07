@@ -1,5 +1,5 @@
-/* TaskEditModal(index.jsx)的 scoped 樣式:雙擊甘特條後彈出的任務編輯彈窗
-   (遮罩、卡片、預設資訊列、工時/等待/釘選欄位、警示與 footer 按鈕)。 */
+/* TaskEditModal(index.jsx)的 scoped 樣式:雙擊任務後彈出的排程設定彈窗
+   (遮罩、卡片、開始/結束時間列、0 工時、負責人、等待天數欄位、錯誤與 footer 按鈕)。 */
 
 .backdrop {
   position: fixed; inset: 0; z-index: 300;
@@ -20,58 +20,49 @@
 }
 .title { font-weight: 600; font-size: 14px; color: var(--ink); }
 .sub { font-size: 11px; color: var(--ink-3); }
-.info {
-  padding: 10px 20px;
-  background: var(--surface-soft);
-  border-bottom: 1px solid var(--border);
-  display: flex; gap: 20px; font-size: 12px; color: var(--ink-3);
-}
-.infoLabel { font-weight: 500; color: var(--ink-2); margin-right: 4px; }
 .body {
   padding: 16px 20px;
   display: flex; flex-direction: column; gap: 14px;
 }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .label { font-size: 12px; font-weight: 500; color: var(--ink-2); }
-.input {
+
+/* 日期 + 時刻並排成一個「日期時間選擇器」 */
+.dtRow { display: flex; align-items: center; gap: 8px; }
+.dtDate { flex: 1; min-width: 0; }
+
+.checkRow {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer; margin: 0;
+}
+.checkRow input[type="checkbox"] { cursor: pointer; }
+
+.input, .select {
   padding: 7px 10px; border-radius: 8px;
   border: 1px solid var(--border); background: var(--surface);
   color: var(--ink); font-size: 13px; width: 100%; box-sizing: border-box;
 }
-.input:focus { outline: none; border-color: var(--accent); }
+.select { cursor: pointer; }
+.input:focus, .select:focus { outline: none; border-color: var(--accent); }
+
+.error {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: #b45309;
+  background: #fef3c7; border-radius: 6px; padding: 6px 8px;
+  margin: 0 20px;
+}
+
 .footer {
   padding: 12px 20px;
   border-top: 1px solid var(--border);
   display: flex; gap: 8px; justify-content: flex-end;
 }
-/* 儲存時的「自動重排 / 只改這一個」二選一提示文字 */
-.choiceHint {
-  padding: 10px 20px 0;
-  font-size: 12px; color: var(--ink-2);
-}
-.pinRow {
-  display: flex; align-items: center; gap: 8px;
-  flex-wrap: wrap; cursor: pointer; margin: 0;
-}
-.pinRow input[type="checkbox"] { cursor: pointer; }
-/* 釘選日選擇器靠右,故 margin-left: auto 直接寫在樣式裡 */
-.pinDate {
-  padding: 3px 6px; border-radius: 6px;
-  border: 1px solid var(--border); background: var(--surface);
-  color: var(--ink); font-size: 12px; margin-left: auto;
-}
-.pinWarn {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 11px; color: #b45309;
-  background: #fef3c7; border-radius: 6px; padding: 6px 8px;
-  margin-top: 6px;
-}
-.pinBtn {
+.btn {
   padding: 6px 14px; border-radius: 8px; font-size: 13px; cursor: pointer;
   border: 1px solid var(--border); background: var(--surface); color: var(--ink);
 }
-.pinBtn.primary {
+.btn.primary {
   background: var(--accent); color: var(--accent-ink);
   border-color: transparent;
 }
-.pinBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }

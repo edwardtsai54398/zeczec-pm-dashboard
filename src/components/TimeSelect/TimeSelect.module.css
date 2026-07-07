@@ -1,0 +1,9 @@
+/* TimeSelect(index.jsx)的 scoped 樣式:30 分鐘一格的時刻下拉,外觀比照彈窗表單輸入框。 */
+.select {
+  padding: 6px 8px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--ink); font-size: 13px;
+  font-variant-numeric: tabular-nums; cursor: pointer;
+}
+.select:focus { outline: none; border-color: var(--accent); }
+.select:disabled { opacity: 0.5; cursor: not-allowed; }
