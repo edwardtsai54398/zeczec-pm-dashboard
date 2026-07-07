@@ -2,22 +2,77 @@ import { useState, useMemo, useCallback } from 'react';
 import { addD, dBt, fmt, fmtF, pD } from '../../../../lib/dateUtils.js';
 import { WEEK } from '../../shared.js';
 import { useWorkspace } from '../../../../context/WorkspaceContext.jsx';
+import { useAuthContext } from '../../../../context/AuthContext.jsx';
+import { useWorkspaceMembers } from '../../../../hooks/useWorkspaceMembers.js';
 import { usePermissions } from '../../../../hooks/usePermissions.js';
 import TaskEditModal from '../TaskEditModal/index.jsx';
-import { toneKey, buildPeriodBars, sunday } from '../utils.js';
+import {
+  toneKey, buildPeriodBars, sunday,
+  bucketFor, buildMemberColors, memberColorOf, layoutDayColumns, hourLabel,
+} from '../utils.js';
 import styles from './CalendarWeek.module.css';
 
-// 每小時列高(px)。列數 = 工作區設定的每日工時;不顯示時刻文字,
-// 因為不知道使用者幾點開始上班,只呈現「當天第 1~N 小時」的相對順序。
-const HOUR_H = 70;
+// 時間軸寫死真實時鐘:上午 8 點到午夜(24 點),每小時一列。
+// 自動排程輸出的 offset(該成員當日已用工時數)以 SCHEDULE_START_HOUR 為第 0 小時的落點,
+// 所以 o=0 的任務畫在 10:00、而 8~9 點是空的早晨。這是純顯示層位移,排程器不知道幾點上班。
+const HOUR_H = 52;
+const GRID_START_HOUR = 8;
+const GRID_END_HOUR = 24;
+const SCHEDULE_START_HOUR = 10;
+const START_ROWS = SCHEDULE_START_HOUR - GRID_START_HOUR; // 排程起點在格線上的列位移
+const ROWS = GRID_END_HOUR - GRID_START_HOUR;
+const HOUR_ROWS = Array.from({ length: ROWS }, (_, i) => GRID_START_HOUR + i);
+
+// 成員顯示偏好存本機(不上雲):依 workspace 分 key,重整後沿用。
+const visibleMembersKey = (workspaceId) => `calendar_visible_members_${workspaceId}`;
+
+// 讀某工作區的「顯示哪些成員」:localStorage 有就用,沒存過預設「只顯示自己」。
+function readVisibleMembers(workspaceId, currentUserId) {
+  try {
+    const raw = localStorage.getItem(visibleMembersKey(workspaceId));
+    if (raw) return new Set(JSON.parse(raw));
+  } catch { /* 隱私模式讀不到就走預設 */ }
+  return new Set(currentUserId ? [currentUserId] : []);
+}
 
 export default function CalendarWeek({ selectedProjects, onToggleMode }) {
   // 資料層直接從 context 取(比照 GanttView);篩選 state 由 Gantt 容器持有。
-  const { projects, sch: data, settings, applyTaskDateChange } = useWorkspace();
+  const { projects, sch: data, applyTaskDateChange } = useWorkspace();
   const { can } = usePermissions();
   const canEdit = can('editGantt'); // viewer 不能訂選任務日期(double click 無效)
 
-  const hoursPerDay = settings?.hoursPerDay || 8;
+  // 成員相關狀態全在這層自持(不從容器 props 傳下來):清單、分桶、配色、顯示開關。
+  const { workspaceId, session } = useAuthContext();
+  const currentUserId = session?.user?.id ?? null;
+  const { members } = useWorkspaceMembers(workspaceId);
+  const ownerId = useMemo(() => members.find(member => member.role === 'owner')?.user_id ?? null, [members]);
+  const memberIdSet = useMemo(() => new Set(members.map(member => member.user_id)), [members]);
+  const memberColors = useMemo(() => buildMemberColors(members), [members]);
+
+  // 顯示哪些成員的任務。初值由 localStorage 讀(沒存過預設只顯示自己);
+  // 切換工作區時在 render 期間即時改讀新工作區的偏好(React 推薦作法,取代 setState-in-effect)。
+  const [visibleMembers, setVisibleMembers] = useState(() => readVisibleMembers(workspaceId, currentUserId));
+  const [trackedWorkspace, setTrackedWorkspace] = useState(workspaceId);
+  if (workspaceId !== trackedWorkspace) {
+    setTrackedWorkspace(workspaceId);
+    setVisibleMembers(readVisibleMembers(workspaceId, currentUserId));
+  }
+
+  const toggleMember = useCallback((memberId) => {
+    setVisibleMembers(prev => {
+      const next = new Set(prev);
+      if (next.has(memberId)) next.delete(memberId);
+      else next.add(memberId);
+      try { localStorage.setItem(visibleMembersKey(workspaceId), JSON.stringify([...next])); } catch { /* 隱私模式忽略 */ }
+      return next;
+    });
+  }, [workspaceId]);
+
+  const memberNameOf = useCallback((memberId) => {
+    if (memberId == null) return '未指派';
+    const member = members.find(m => m.user_id === memberId);
+    return member ? (member.display_name || member.email) : '未指派';
+  }, [members]);
 
   const today = useMemo(() => { const date = new Date(); date.setHours(0, 0, 0, 0); return date; }, []);
 
@@ -47,8 +102,16 @@ export default function CalendarWeek({ selectedProjects, onToggleMode }) {
     return cells;
   }, [weekStart, today]);
 
-  // 依排程器的每日分配明細(task.days)把任務攤進各天:
-  // 有工時的任務照 { h, o } 畫成區塊;0 工時任務(發文類)進頂部全天列。
+  // 成員清單尚未載入(RPC pending)時不套用過濾,避免整週閃空白;載入後才依 visibleMembers 篩。
+  const filterActive = members.length > 0;
+  const isVisible = useCallback(
+    (memberId) => !filterActive || visibleMembers.has(memberId),
+    [filterActive, visibleMembers],
+  );
+
+  // 依排程器的每日分配明細(task.days)把任務攤進各天:有工時的畫成區塊、0 工時進頂部全天列。
+  // 每個任務先用 bucketFor 算負責成員,依 visibleMembers 過濾;同一天內重疊的區塊再跑
+  // layoutDayColumns 得 { col, cols } 做左右錯開。
   const { dayBlocks, allDayChips } = useMemo(() => {
     const blocks = {};
     const chips = {};
@@ -58,21 +121,34 @@ export default function CalendarWeek({ selectedProjects, onToggleMode }) {
       const tone = toneKey(project);
       Object.values(data[project.id] || {}).forEach(task => {
         if (!task.start || !task.end) return;
+        const memberId = bucketFor(task.assignee, ownerId, memberIdSet);
+        if (!isVisible(memberId)) return;
+        const memberColor = memberColorOf(memberColors, memberId);
         if (task.hours === 0) {
           const startKey = fmtF(new Date(task.start));
-          if (chips[startKey]) chips[startKey].push({ task, project, tone });
+          if (chips[startKey]) chips[startKey].push({ task, project, tone, memberId, memberColor });
           return;
         }
         Object.entries(task.days || {}).forEach(([dateKey, { h, o }]) => {
-          if (blocks[dateKey]) blocks[dateKey].push({ task, project, tone, hours: h, offset: o });
+          if (blocks[dateKey]) blocks[dateKey].push({ task, project, tone, memberId, memberColor, hours: h, offset: o });
         });
       });
     });
 
-    // 依 offset 排序讓 DOM 順序 = 視覺順序(排程器的優先順序)
-    weekDays.forEach(day => blocks[day.key].sort((a, b) => a.offset - b.offset));
+    // 依 offset 排序讓 DOM 順序 = 視覺順序,再算重疊欄位。
+    // 忠實照落地排程的 o 定位——不在渲染層重排(手動排程優先);時間重疊就分欄錯開。
+    weekDays.forEach(day => {
+      const list = blocks[day.key];
+      list.sort((a, b) => a.offset - b.offset);
+      const layout = layoutDayColumns(list);
+      list.forEach(block => {
+        const { col, cols } = layout.get(block) || { col: 0, cols: 1 };
+        block.col = col;
+        block.cols = cols;
+      });
+    });
     return { dayBlocks: blocks, allDayChips: chips };
-  }, [selectedProjects, data, weekDays]);
+  }, [selectedProjects, data, weekDays, ownerId, memberIdSet, memberColors, isVisible]);
 
   const milestones = useMemo(() => {
     const result = [];
@@ -112,7 +188,7 @@ export default function CalendarWeek({ selectedProjects, onToggleMode }) {
     return total;
   }, [selectedProjects, data]);
 
-  const handleBlockEnter = useCallback((event, task, project, dayHours) => {
+  const handleBlockEnter = useCallback((event, task, project, dayHours, assigneeName) => {
     const rect = event.currentTarget.getBoundingClientRect();
     setTip({
       x: rect.left + rect.width / 2,
@@ -120,6 +196,7 @@ export default function CalendarWeek({ selectedProjects, onToggleMode }) {
       task,
       project,
       dayHours,
+      assigneeName,
     });
   }, []);
   const handleLeave = useCallback(() => setTip(null), []);
@@ -188,6 +265,29 @@ export default function CalendarWeek({ selectedProjects, onToggleMode }) {
           </div>
         </div>
 
+        {members.length > 0 && (
+          <div className={styles.memberFilter}>
+            <span className={styles.memberFilterLabel}>成員</span>
+            {members.map(member => {
+              const color = memberColorOf(memberColors, member.user_id);
+              const checked = !!visibleMembers?.has(member.user_id);
+              return (
+                <button key={member.user_id}
+                  className={`${styles.memberChip}${checked ? ` ${styles.memberChecked}` : ''}`}
+                  style={checked ? { borderColor: color } : undefined}
+                  onClick={() => toggleMember(member.user_id)}>
+                  <span className={styles.memberCheckbox}
+                    style={checked ? { background: color, borderColor: color } : undefined}>
+                    {checked && <i className={`ti ti-check ${styles.memberCheckIcon}`}></i>}
+                  </span>
+                  <span className={styles.memberDot} style={{ background: color, opacity: checked ? 1 : 0.4 }}></span>
+                  {member.display_name || member.email}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         <div className={styles.headerRow}>
           <div className={styles.gutterCell} />
           <div className={styles.days}>
@@ -208,10 +308,11 @@ export default function CalendarWeek({ selectedProjects, onToggleMode }) {
               {weekDays.map(day => (
                 <div key={day.key}
                   className={`${styles.allDayCell}${day.isWeekend ? ` ${styles.weekend}` : ''}`}>
-                  {allDayChips[day.key].map(({ task, project, tone }) => (
+                  {allDayChips[day.key].map(({ task, project, tone, memberId, memberColor }) => (
                     <div key={`${project.id}-${task.id}`}
                       className={`${styles.chip} ${styles[tone]}`}
-                      onMouseEnter={(e) => handleBlockEnter(e, task, project, null)}
+                      style={{ borderLeft: `3px solid ${memberColor}` }}
+                      onMouseEnter={(e) => handleBlockEnter(e, task, project, null, memberId != null ? memberNameOf(memberId) : null)}
                       onMouseLeave={handleLeave}
                       onDoubleClick={(e) => handleDblClick(e, task, project)}>
                       {task.n}
@@ -244,19 +345,32 @@ export default function CalendarWeek({ selectedProjects, onToggleMode }) {
         )}
 
         <div className={styles.body}>
-          <div className={styles.bodyGrid} style={{ height: hoursPerDay * HOUR_H }}>
-            <div className={styles.gutter} />
+          <div className={styles.bodyGrid} style={{ height: ROWS * HOUR_H, '--hour-h': `${HOUR_H}px` }}>
+            <div className={styles.gutter}>
+              {HOUR_ROWS.map(hour => (
+                <div key={hour} className={styles.hourLabel} style={{ top: (hour - GRID_START_HOUR) * HOUR_H }}>
+                  {hourLabel(hour)}
+                </div>
+              ))}
+            </div>
             <div className={styles.daysArea}>
               {weekDays.map(day => (
                 <div key={day.key}
                   className={`${styles.dayCol}${day.isWeekend ? ` ${styles.weekend}` : ''}${day.isToday ? ` ${styles.today}` : ''}`}>
-                  {dayBlocks[day.key].map(({ task, project, tone, hours, offset }) => (
+                  {dayBlocks[day.key].map(({ task, project, tone, memberId, memberColor, hours, offset, col, cols }) => (
                     <div key={`${project.id}-${task.id}`}
                       className={`${styles.block} ${styles[tone]}`}
-                      style={{ top: offset * HOUR_H + 1, height: Math.max(hours * HOUR_H - 2, 16) }}
-                      onMouseEnter={(e) => handleBlockEnter(e, task, project, hours)}
+                      style={{
+                        top: (START_ROWS + offset) * HOUR_H + 1,
+                        height: Math.max(hours * HOUR_H - 2, 16),
+                        left: `calc(${(col * 100) / cols}% + 3px)`,
+                        width: `calc(${100 / cols}% - 6px)`,
+                        right: 'auto',
+                      }}
+                      onMouseEnter={(e) => handleBlockEnter(e, task, project, hours, memberId != null ? memberNameOf(memberId) : null)}
                       onMouseLeave={handleLeave}
                       onDoubleClick={(e) => handleDblClick(e, task, project)}>
+                      <span className={styles.memberStripe} style={{ background: memberColor }} />
                       <span className={styles.blockName}>{task.n}</span>
                       <span className={styles.blockHrs}>{hours}h</span>
                     </div>
@@ -284,7 +398,7 @@ export default function CalendarWeek({ selectedProjects, onToggleMode }) {
             </span>
           </div>
           <div>
-            每格一小時 · 一日 {hoursPerDay} 小時工時
+            每格一小時 · 上午 8 點 – 午夜 · 自動排程 10 點起
           </div>
         </div>
       </div>
@@ -301,6 +415,7 @@ export default function CalendarWeek({ selectedProjects, onToggleMode }) {
             <>
               <strong>{tip.task.n}</strong>
               <span>{tip.project.name}</span>
+              {tip.assigneeName && <span>負責人:{tip.assigneeName}</span>}
               <span>{fmt(tip.task.start)} – {fmt(tip.task.end)}</span>
               {tip.dayHours != null && <span>本日 {tip.dayHours}h</span>}
               {tip.task.hours > 0 && <span>共 {tip.task.hours}h</span>}

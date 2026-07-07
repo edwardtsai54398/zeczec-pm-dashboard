@@ -1,13 +1,14 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { addD, fmtF } from '../../../../../lib/dateUtils.js';
 import { sunday } from '../../utils.js';
 import styles from '../CalendarWeek.module.css';
 
-// CalendarWeek 自己從 context 取排程/設定(比照 Gantt 測試),
-// 測試把 WorkspaceContext / AuthContext 換成可控假實作。
-const mockWorkspace = vi.hoisted(() => ({ projects: [], sch: {}, settings: {}, applyTaskDateChange: () => {} }));
-const mockAuth = vi.hoisted(() => ({ role: 'owner' }));
+// CalendarWeek 自己從 context 取排程,並自持成員清單/顯示開關;
+// 測試把 WorkspaceContext / AuthContext / useWorkspaceMembers 換成可控假實作。
+const mockWorkspace = vi.hoisted(() => ({ projects: [], sch: {}, applyTaskDateChange: () => {} }));
+const mockAuth = vi.hoisted(() => ({ role: 'owner', workspaceId: 'W1', session: { user: { id: 'U_owner' } } }));
+const mockMembers = vi.hoisted(() => ({ value: [] }));
 
 vi.mock('../../../../../context/WorkspaceContext.jsx', () => ({
   useWorkspace: () => mockWorkspace,
@@ -15,6 +16,10 @@ vi.mock('../../../../../context/WorkspaceContext.jsx', () => ({
 
 vi.mock('../../../../../context/AuthContext.jsx', () => ({
   useAuthContext: () => mockAuth,
+}));
+
+vi.mock('../../../../../hooks/useWorkspaceMembers.js', () => ({
+  useWorkspaceMembers: () => ({ members: mockMembers.value, loading: false, error: '', refetch: () => {} }),
 }));
 
 import CalendarWeek from '../index.jsx';
@@ -26,19 +31,25 @@ const dot = (...keys) => '.' + keys.map((key) => styles[key]).join('.');
 const weekSunday = sunday(new Date());
 const dayKey = (index) => fmtF(addD(weekSunday, index));
 
+// 顯示偏好存 localStorage(依 workspace 分 key)。只移除本測試用到的那個 key
+// (比照 useCloudWorkspaceState 測試,不動其他 app 資料),確保每個測試走「預設只顯示自己」。
+const VISIBLE_KEY = 'calendar_visible_members_W1';
+beforeEach(() => { localStorage.removeItem(VISIBLE_KEY); });
+
 function makeProject(id, name, opts = {}) {
   return { id, name, tone: opts.tone || 'lavender', ...opts };
 }
 
-// days: { 'YYYY-MM-DD': { h, o } } — 排程器輸出的每日分配明細
-function makeTask(id, name, startKey, endKey, hours, days = {}) {
-  return { id, n: name, start: startKey, end: endKey, hours, days };
+// days: { 'YYYY-MM-DD': { h, o } } — 排程器輸出的每日分配明細;opts 可帶 assignee 等。
+function makeTask(id, name, startKey, endKey, hours, days = {}, opts = {}) {
+  return { id, n: name, start: startKey, end: endKey, hours, days, ...opts };
 }
 
-function renderCalendar({ projects = [], data = {}, settings = { hoursPerDay: 8 }, onToggleMode = () => {} } = {}) {
+function renderCalendar({ projects = [], data = {}, members = [], currentUserId = 'U_owner', onToggleMode = () => {} } = {}) {
   mockWorkspace.projects = projects;
   mockWorkspace.sch = data;
-  mockWorkspace.settings = settings;
+  mockMembers.value = members;
+  mockAuth.session = { user: { id: currentUserId } };
   return render(<CalendarWeek selectedProjects={projects} onToggleMode={onToggleMode} />);
 }
 
@@ -70,21 +81,46 @@ describe('週格線與表頭', () => {
     expect(container.querySelector(dot('dayHead', 'today'))).toBeTruthy();
   });
 
-  it('hoursPerDay 決定格線高度:10 小時 → 700px', () => {
-    const { container } = renderCalendar({ projects, data, settings: { hoursPerDay: 10 } });
+  it('格線高度固定為 16 列 × HOUR_H(52)= 832px,不再隨 hoursPerDay', () => {
+    const { container } = renderCalendar({ projects, data });
     const bodyGrid = container.querySelector(dot('bodyGrid'));
-    expect(bodyGrid.style.height).toBe('700px');
+    expect(bodyGrid.style.height).toBe('832px');
   });
 });
 
 // ============================================================
-// 2. 任務區塊(依 days 每日分配定位)
+// 2. 時間軸(寫死 8 點–午夜,排程 10 點起)
+// ============================================================
+
+describe('時間軸與 10 點起排', () => {
+  const projects = [makeProject('P1', '專案A')];
+
+  it('gutter 渲染 8→23 點共 16 個時刻標籤,含「上午8點」「中午12點」', () => {
+    const { container } = renderCalendar({ projects, data: { P1: {} } });
+    const labels = container.querySelectorAll(dot('hourLabel'));
+    expect(labels.length).toBe(16);
+    expect(labels[0].textContent).toBe('上午8點');
+    expect([...labels].some(label => label.textContent === '中午12點')).toBe(true);
+  });
+
+  it('o=0 的任務畫在 10:00(START_ROWS=2 → top = (2+0)×52+1 = 105px)', () => {
+    const data = {
+      P1: { T1: makeTask('T1', '早班', dayKey(1), dayKey(1), 4, { [dayKey(1)]: { h: 4, o: 0 } }) },
+    };
+    const { container } = renderCalendar({ projects, data });
+    const block = container.querySelector(dot('block'));
+    expect(block.style.top).toBe('105px');
+  });
+});
+
+// ============================================================
+// 3. 任務區塊(依 days 每日分配定位)
 // ============================================================
 
 describe('任務區塊', () => {
   const projects = [makeProject('P1', '專案A', { tone: 'lime' })];
 
-  it('依 days 明細定位:top = o×70+1,height = h×70−2', () => {
+  it('依 days 明細定位:top =(2+o)×52+1,height = h×52−2', () => {
     const data = {
       P1: {
         T1: makeTask('T1', '設計稿', dayKey(1), dayKey(2), 11, {
@@ -96,9 +132,9 @@ describe('任務區塊', () => {
     const { container } = renderCalendar({ projects, data });
     const blocks = container.querySelectorAll(dot('block'));
     expect(blocks.length).toBe(2);
-    const secondDayBlock = [...blocks].find(element => element.style.top === '141px');
+    const secondDayBlock = [...blocks].find(element => element.style.top === '209px');
     expect(secondDayBlock).toBeTruthy();
-    expect(secondDayBlock.style.height).toBe('208px');
+    expect(secondDayBlock.style.height).toBe('154px');
   });
 
   it('同一天多個區塊依 offset 排序(DOM 順序 = 視覺順序)', () => {
@@ -146,7 +182,7 @@ describe('任務區塊', () => {
       },
     };
     const { container } = renderCalendar({ projects, data });
-    const block = [...container.querySelectorAll(dot('block'))].find(element => element.style.height === '208px');
+    const block = [...container.querySelectorAll(dot('block'))].find(element => element.style.height === '154px');
     fireEvent.mouseEnter(block);
     const tooltip = container.querySelector(dot('tooltip'));
     expect(tooltip).toBeTruthy();
@@ -159,7 +195,65 @@ describe('任務區塊', () => {
 });
 
 // ============================================================
-// 3. 0 工時任務(整天列)
+// 4. 成員篩選(預設只顯示自己 + 錯開)
+// ============================================================
+
+describe('成員篩選', () => {
+  const projects = [makeProject('P1', '專案A')];
+  const members = [
+    { user_id: 'U_owner', role: 'owner', display_name: '我' },
+    { user_id: 'U_b', role: 'member', display_name: '小明' },
+  ];
+  // owner 的任務不寫 assignee(讀作 owner);小明的任務 assignee = U_b。兩者同一天同時段。
+  const data = {
+    P1: {
+      T_owner: makeTask('T_owner', '我的任務', dayKey(1), dayKey(1), 4, { [dayKey(1)]: { h: 4, o: 0 } }),
+      T_b: makeTask('T_b', '小明任務', dayKey(1), dayKey(1), 4, { [dayKey(1)]: { h: 4, o: 0 } }, { assignee: 'U_b' }),
+    },
+  };
+
+  it('每位成員渲染一顆 chip', () => {
+    const { container } = renderCalendar({ projects, data, members });
+    expect(container.querySelectorAll(dot('memberChip')).length).toBe(2);
+  });
+
+  it('預設只渲染自己(owner)的任務', () => {
+    const { container } = renderCalendar({ projects, data, members, currentUserId: 'U_owner' });
+    const blocks = container.querySelectorAll(dot('block'));
+    expect(blocks.length).toBe(1);
+    expect(blocks[0].textContent).toContain('我的任務');
+  });
+
+  it('勾選其他成員後其任務出現,並寫入 localStorage', () => {
+    const { container } = renderCalendar({ projects, data, members, currentUserId: 'U_owner' });
+    const chip = [...container.querySelectorAll(dot('memberChip'))].find(c => c.textContent.includes('小明'));
+    fireEvent.click(chip);
+    expect(container.querySelectorAll(dot('block')).length).toBe(2);
+    const stored = JSON.parse(localStorage.getItem(VISIBLE_KEY));
+    expect(stored).toContain('U_b');
+  });
+
+  it('兩成員同一天同時段重疊 → 各自縮寬錯開(cols=2,寬度含 50%)', () => {
+    // 兩人都打開(略過「預設只自己」),驗證重疊時 layoutDayColumns 分兩欄。
+    localStorage.setItem(VISIBLE_KEY, JSON.stringify(['U_owner', 'U_b']));
+    const { container } = renderCalendar({ projects, data, members });
+    const blocks = container.querySelectorAll(dot('block'));
+    expect(blocks.length).toBe(2);
+    blocks.forEach(block => expect(block.style.width).toContain('50%'));
+    // 兩塊各佔一欄:left 其中一塊是 50%
+    const lefts = [...blocks].map(block => block.style.left);
+    expect(lefts.some(left => left.includes('50%'))).toBe(true);
+  });
+
+  it('每個區塊帶成員色條(memberStripe)', () => {
+    const { container } = renderCalendar({ projects, data, members, currentUserId: 'U_owner' });
+    const block = container.querySelector(dot('block'));
+    expect(block.querySelector(dot('memberStripe'))).toBeTruthy();
+  });
+});
+
+// ============================================================
+// 5. 0 工時任務(整天列)
 // ============================================================
 
 describe('0 工時任務(整天列)', () => {
@@ -186,7 +280,7 @@ describe('0 工時任務(整天列)', () => {
 });
 
 // ============================================================
-// 4. 里程碑與期間帶
+// 6. 里程碑與期間帶
 // ============================================================
 
 describe('里程碑與期間帶', () => {
@@ -222,7 +316,7 @@ describe('里程碑與期間帶', () => {
 });
 
 // ============================================================
-// 5. 導覽與模式切換
+// 7. 導覽與模式切換
 // ============================================================
 
 describe('導覽與模式切換', () => {

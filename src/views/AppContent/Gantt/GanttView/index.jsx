@@ -6,7 +6,7 @@ import { useAuthContext } from '../../../../context/AuthContext.jsx';
 import { useWorkspaceMembers } from '../../../../hooks/useWorkspaceMembers.js';
 import { usePermissions } from '../../../../hooks/usePermissions.js';
 import TaskEditModal from '../TaskEditModal/index.jsx';
-import { toneKey, buildPeriodBars, assignLanes, orderedPhaseKeys } from '../utils.js';
+import { toneKey, buildPeriodBars, assignLanes, orderedPhaseKeys, bucketFor } from '../utils.js';
 import styles from './GanttView.module.css';
 
 const WEEKEND_BAR_TASKS = new Set(['7.3', '7.5', '7.7', '7.8', '7.10', '8.2', '8.4', '8.6', '8.8', '8.10']);
@@ -94,8 +94,8 @@ function buildPhaseRows(records, members, ownerId, memberIdSet) {
   let hasUnassigned = false;
   for (const entry of records) {
     const rawAssignee = (entry.project.tasks || []).find(task => task.id === entry.record.id)?.assignee;
-    // 非 owner 的現有成員 → 該成員;其餘一律歸 owner。owner 尚未載入(null)時才暫掛未指派列。
-    const bucket = rawAssignee && rawAssignee !== ownerId && memberIdSet.has(rawAssignee) ? rawAssignee : (ownerId ?? null);
+    // 分桶規則抽到 utils.bucketFor,與 CalendarWeek 成員過濾共用同一條規則。
+    const bucket = bucketFor(rawAssignee, ownerId, memberIdSet);
     if (bucket === null) hasUnassigned = true;
     const item = { ...entry, start: entry.record.start, end: entry.record.end };
     if (!byBucket.has(bucket)) byBucket.set(bucket, []);

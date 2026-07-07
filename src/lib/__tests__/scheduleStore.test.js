@@ -35,7 +35,16 @@ describe('hydrateSchedule', () => {
     expect(rec.days['2020-01-06'].h).toBe(8);
   });
 
-  it('freeze(hydrate(x)) 會 round-trip 回原本的已存形狀', () => {
+  it('從 project.tasks 反查補回 assignee(落地 schedule 沒存 assignee)', () => {
+    const project = makeProject({
+      tasks: [{ id: '2.1', enabled: true, assignee: 'U_b' }, { id: '2.2', enabled: true }],
+    });
+    const { sch } = hydrateSchedule([project], SETTINGS);
+    expect(sch.p1['2.1'].assignee).toBe('U_b'); // 指派給 U_b
+    expect(sch.p1['2.2'].assignee).toBe(null);  // 未指派 → null(讀作 owner)
+  });
+
+  it('freeze(hydrate(x)) 會 round-trip 回原本的已存形狀(assignee 不落地)', () => {
     const project = makeProject();
     const { sch } = hydrateSchedule([project], SETTINGS);
     expect(freezeSchedule(sch.p1)).toEqual(project.schedule);

@@ -43,6 +43,14 @@ function taskEnabled(project, taskId) {
   return !!tasks.find((t) => t.id === taskId && t.enabled);
 }
 
+// 任務負責人:assignee 存在 project.tasks[].assignee(非 BT 敘述、也不落地進 schedule),
+// 所以水合時要從 project.tasks 反查補回,record 才跟 makeRecord 同形狀(帶 assignee)。
+// 外包展開的 .1 審核子任務跟父任務同一負責人(比照 makeRecord)。缺省(未指派)= null。
+function assigneeFromProject(project, taskId) {
+  const lookupId = isSyntheticReview(taskId) ? taskId.slice(0, -2) : taskId;
+  return (project.tasks || []).find((t) => t.id === lookupId)?.assignee ?? null;
+}
+
 // 一筆已存 schedule entry → makeRecord 形狀的 record(日期字串轉回 Date)。
 function recordFromStored(project, taskId, stored) {
   const base = baseTaskFor(taskId);
@@ -63,6 +71,8 @@ function recordFromStored(project, taskId, stored) {
     pid:     project.id,
     pn:      project.name,
     effH:    hours,
+    // assignee 供行事曆/資源視圖以人為軸分桶;落地 schedule 沒存,從 project.tasks 反查。
+    assignee: assigneeFromProject(project, taskId),
   };
 }
 

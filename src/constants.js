@@ -3,6 +3,23 @@ export const STORAGE_KEY = "cfpm4";
 
 export const TONE_PALETTE = ["lavender", "lime", "peach", "sky", "rose", "olive"];
 
+// 成員色:行事曆模式用來標示「這格是誰的任務」（區塊左色條 + 頂部成員 chip 色點）。
+// 刻意用飽和實色,與上面偏粉的專案 TONE_PALETTE 明顯分流,避免「成員色」被誤認成「專案色」。
+// 依成員在清單中的順序循環取用(見 Gantt/utils.js buildMemberColors)。
+export const MEMBER_PALETTE = [
+  "#4C6EF5", // 藍
+  "#E8590C", // 橘
+  "#2F9E44", // 綠
+  "#E64980", // 桃紅
+  "#7048E8", // 紫
+  "#0CA678", // 青綠
+  "#F08C00", // 琥珀
+  "#1098AD", // 藍綠
+];
+
+// 未指派 / 成員清單尚未載入時的中性色。
+export const MEMBER_UNASSIGNED_COLOR = "#868E96";
+
 export const ACCENT_PALETTES = [
   ["#C9C5F0", "#5A52B8", "#E5E3F8"],
   ["#DDEF8B", "#586E1B", "#EEF5C0"],

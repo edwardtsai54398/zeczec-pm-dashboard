@@ -62,11 +62,41 @@
 .swatch.tl { background: var(--t-peach-ink); border-radius: 50%; width: 12px; }
 .swatch.ms { background: white; border: 1.5px dashed var(--t-lime-ink); height: 14px; }
 
-/* 每一列都是「48px 時間軸 gutter + 7 等分欄」的 grid,彼此天然對齊 */
+/* 成員篩選列:行事曆自持的「顯示哪些成員」開關(比照專案篩選 chip)。
+   色點 / 勾選框的顏色是成員色(runtime,inline 帶);這裡只放結構樣式。 */
+.memberFilter {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 10px 16px; border-bottom: 1px solid var(--border);
+  background: var(--surface-soft);
+}
+.memberFilterLabel {
+  font-size: 11px; color: var(--ink-3);
+  font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; margin-right: 2px;
+}
+.memberChip {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 6px 12px 6px 10px;
+  background: white; border: 1.5px solid var(--border);
+  border-radius: 999px; font-size: 12.5px; font-weight: 500;
+  color: var(--ink-2); transition: all .15s; cursor: pointer; user-select: none;
+}
+.memberChip:hover { border-color: var(--border-strong); }
+.memberChecked { color: var(--ink); }
+.memberCheckbox {
+  width: 15px; height: 15px; border-radius: 5px;
+  border: 1.5px solid var(--ink-4); background: white;
+  display: flex; align-items: center; justify-content: center;
+  color: white; flex-shrink: 0;
+}
+.memberCheckIcon { font-size: 10px; }
+.memberDot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+/* 每一列都是「60px 時間軸 gutter + 7 等分欄」的 grid,彼此天然對齊 */
 .headerRow,
 .allDayRow,
 .periodRow,
-.bodyGrid { display: grid; grid-template-columns: 48px 1fr; }
+.bodyGrid { display: grid; grid-template-columns: 60px 1fr; }
 .days,
 .daysArea { display: grid; grid-template-columns: repeat(7, 1fr); }
 .gutterCell { border-right: 1px solid var(--border); }
@@ -130,32 +160,41 @@
 .periodBar.olive    { background: var(--t-olive);    box-shadow: inset 0 0 0 1px rgba(94,120,32,.4); }
 .periodBar.charcoal { background: var(--t-charcoal); box-shadow: inset 0 0 0 1px rgba(61,58,51,.3); }
 
-/* 小時格線主體:每 70px 一條格線用背景漸層畫,不做逐小時 DOM */
+/* 小時格線主體:每 var(--hour-h) 一條格線用背景漸層畫,不做逐小時 DOM。
+   --hour-h 由 index.jsx 用 HOUR_H 常數 inline 設在 .bodyGrid,JS 與 CSS 共用同一個列高、不會走鐘。 */
 .body { flex: 1; overflow-y: auto; min-height: 0; }
 .gutter {
+  position: relative;
   border-right: 1px solid var(--border);
-  background: repeating-linear-gradient(to bottom, transparent 0 69px, var(--border) 69px 70px);
+  background: repeating-linear-gradient(to bottom, transparent 0 calc(var(--hour-h) - 1px), var(--border) calc(var(--hour-h) - 1px) var(--hour-h));
+}
+/* 時間軸標籤:對齊每小時列的頂線,右對齊靠近格線 */
+.hourLabel {
+  position: absolute; right: 6px;
+  font-size: 10.5px; color: var(--ink-3);
+  line-height: 1; padding-top: 3px;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 .dayCol {
   position: relative; overflow: hidden;
   border-right: 1px solid var(--border);
-  background: repeating-linear-gradient(to bottom, transparent 0 69px, var(--border) 69px 70px);
+  background: repeating-linear-gradient(to bottom, transparent 0 calc(var(--hour-h) - 1px), var(--border) calc(var(--hour-h) - 1px) var(--hour-h));
 }
 .dayCol.weekend {
   background:
-    repeating-linear-gradient(to bottom, transparent 0 69px, var(--border) 69px 70px),
+    repeating-linear-gradient(to bottom, transparent 0 calc(var(--hour-h) - 1px), var(--border) calc(var(--hour-h) - 1px) var(--hour-h)),
     repeating-linear-gradient(45deg, rgba(22,22,19,.025) 0 6px, transparent 6px 12px);
   background-color: var(--surface-tint);
 }
 .dayCol.blackout {
   background:
-    repeating-linear-gradient(to bottom, transparent 0 69px, var(--border) 69px 70px),
+    repeating-linear-gradient(to bottom, transparent 0 calc(var(--hour-h) - 1px), var(--border) calc(var(--hour-h) - 1px) var(--hour-h)),
     repeating-linear-gradient(45deg, rgba(22,22,19,.06) 0 6px, transparent 6px 12px);
   background-color: var(--surface-tint);
 }
 .dayCol.today {
   background:
-    repeating-linear-gradient(to bottom, transparent 0 69px, var(--border) 69px 70px),
+    repeating-linear-gradient(to bottom, transparent 0 calc(var(--hour-h) - 1px), var(--border) calc(var(--hour-h) - 1px) var(--hour-h)),
     linear-gradient(rgba(245,210,181,.15), rgba(245,210,181,.15));
 }
 
@@ -177,6 +216,11 @@
 .block.charcoal { background: var(--t-charcoal); color: var(--t-charcoal-ink); box-shadow: inset 0 0 0 1px rgba(61,58,51,.3); }
 .blockName { word-break: break-word; }
 .blockHrs { font-size: 11px; opacity: .7; font-variant-numeric: tabular-nums; }
+/* 成員色條:區塊填色是專案色,左緣這條才是「誰的」,對應頂部成員 chip 的色點。 */
+.memberStripe {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px; border-radius: 6px 0 0 6px;
+}
 
 /* 里程碑(同甘特視圖:2px 虛線 + 標籤),overlay 在 7 欄區域上 */
 .milestone {
