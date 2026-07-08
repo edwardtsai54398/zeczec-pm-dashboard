@@ -452,12 +452,7 @@ export default function GanttView({ selectedProjects, onToggleMode }) {
             </button>
           </div>
 
-          <div className={styles.toolbarRight}>
-            <button className={styles.modeToggle} onClick={onToggleMode}>
-              <i className={`ti ti-calendar-week ${styles.modeToggleIcon}`}></i>
-              行事曆模式
-            </button>
-
+          <div className={styles.toolbarRight}>            
             <button
               className={`${styles.modeToggle}${overlayMode ? ` ${styles.active}` : ''}`}
               onClick={() => setOverlayMode(value => !value)}>
@@ -467,6 +462,11 @@ export default function GanttView({ selectedProjects, onToggleMode }) {
               </span>
               疊圖模式
               <i className={`ti ti-arrows-shuffle ${styles.shuffleIcon}`}></i>
+            </button>
+
+            <button className={styles.modeToggle} onClick={onToggleMode}>
+              <i className={`ti ti-calendar-week ${styles.modeToggleIcon}`}></i>
+              行事曆模式
             </button>
 
             <div className={styles.legend}>

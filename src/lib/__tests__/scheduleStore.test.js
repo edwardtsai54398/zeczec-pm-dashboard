@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   hydrateSchedule, freezeSchedule, collectFrozen, collectDownstream, layoutSingleTask, isSchedulable,
+  preserveCustomTasks,
 } from '../scheduleStore.js';
 import { runScheduleV2 } from '../schedulerV2.js';
 import { BT } from '../tasks.js';
@@ -69,6 +70,55 @@ describe('hydrateSchedule', () => {
     const project = makeProject({ schedule: undefined });
     const { sch } = hydrateSchedule([project], SETTINGS);
     expect(Object.keys(sch.p1).length).toBeGreaterThan(0);
+  });
+
+  it('自訂任務(非 BT)用 project.tasks 自帶的 n / p 水合、正常顯示', () => {
+    const project = makeProject({
+      tasks: [
+        { id: '2.1', enabled: true },
+        { id: 'cABC', enabled: true, custom: true, n: '額外拍攝', p: 'custom', assignee: 'U_b' },
+      ],
+      schedule: {
+        '2.1': { start: '2020-01-06', end: '2020-01-06', waitEnd: null, hours: 8, w: 0,
+          days: { '2020-01-06': { h: 8, o: 0 } } },
+        cABC: { start: '2020-01-08', end: '2020-01-08', waitEnd: null, hours: 3, w: 0,
+          days: { '2020-01-08': { h: 3, o: 2 } } },
+      },
+    });
+    const { sch } = hydrateSchedule([project], SETTINGS);
+    const rec = sch.p1.cABC;
+    expect(rec).toBeTruthy();
+    expect(rec.n).toBe('額外拍攝');      // 名稱來自 project.tasks(BT 沒有這個 id)
+    expect(rec.p).toBe('custom');         // 相位歸「自訂任務」
+    expect(rec.start).toBeInstanceOf(Date);
+    expect(rec.hours).toBe(3);
+    expect(rec.assignee).toBe('U_b');     // assignee 照樣從 project.tasks 反查
+  });
+});
+
+describe('preserveCustomTasks', () => {
+  it('把自訂任務的落地 entry 補回被排程器重算洗掉的排程', () => {
+    const project = makeProject({
+      tasks: [
+        { id: '2.1', enabled: true },
+        { id: 'cABC', enabled: true, custom: true, n: 'X', p: 'custom' },
+      ],
+      schedule: {
+        '2.1': { start: '2020-01-06', end: '2020-01-06', waitEnd: null, hours: 8, w: 0, days: {} },
+        cABC: { start: '2020-01-08', end: '2020-01-08', waitEnd: null, hours: 3, w: 0, days: {} },
+      },
+    });
+    // 模擬 runScheduleV2 + freezeSchedule 的結果:只有 BT 任務,自訂任務不見了。
+    const fresh = { '2.1': { start: '2020-01-06', end: '2020-01-06', waitEnd: null, hours: 8, w: 0, days: {} } };
+    const merged = preserveCustomTasks(project, fresh);
+    expect(merged.cABC).toEqual(project.schedule.cABC); // 自訂任務原封補回
+    expect(merged['2.1']).toEqual(fresh['2.1']);        // BT 任務用重算後的值
+  });
+
+  it('沒有自訂任務時原樣回傳', () => {
+    const project = makeProject();
+    const fresh = { '2.1': project.schedule['2.1'] };
+    expect(preserveCustomTasks(project, fresh)).toEqual(fresh);
   });
 });
 

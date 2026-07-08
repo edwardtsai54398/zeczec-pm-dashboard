@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, useCallback } from 'react';
 import { runScheduleV2 } from '../lib/schedulerV2.js';
 import {
   hydrateSchedule, freezeSchedule, collectFrozen, collectDownstream, layoutSingleTask,
+  preserveCustomTasks,
 } from '../lib/scheduleStore.js';
 import { BT } from '../lib/tasks.js';
 import { pD, fmtF } from '../lib/dateUtils.js';
@@ -66,7 +67,8 @@ export function WorkspaceProvider({ children }) {
     const saved = {};
     for (const project of projects) {
       if (!project.startDate) continue; // 沒有啟動日不能排,略過不動
-      const schedule = freezeSchedule(fresh[project.id] || {});
+      // 自訂任務不進排程器,重算後原封補回,才不會被快速排程洗掉。
+      const schedule = preserveCustomTasks(project, freezeSchedule(fresh[project.id] || {}));
       // 排程沒變就不重寫(避免無謂的版號 bump / 雲端寫入)
       if (JSON.stringify(schedule) === JSON.stringify(project.schedule || {})) continue;
       try {
@@ -136,7 +138,8 @@ export function WorkspaceProvider({ children }) {
           (project.id !== pid ? true : !reflow.has(tId)),
         );
         const { sch: fresh } = runScheduleV2(runProjects, settings, { frozen, members });
-        const schedule = freezeSchedule(fresh[pid] || {});
+        // 自訂任務不進排程器,重排後原封補回(editedProject.schedule 仍是 target.schedule,含自訂 entry)。
+        const schedule = preserveCustomTasks(editedProject, freezeSchedule(fresh[pid] || {}));
         // runScheduleV2 重排時不認時鐘,會把 o 打回 packing 值;把「被改任務本身」第一天的 o
         // 覆寫回它的釘選時鐘,讓使用者手動排定的那一格保留時間(下游被重排就隨排程器)。
         if (editedTask?.pinnedStartMin != null && schedule[taskId]?.days) {
@@ -158,12 +161,60 @@ export function WorkspaceProvider({ children }) {
     [projects, settings, members, saveProjectToCloud, setProjects],
   );
 
+  // 使用者在甘特圖手動新增一個自訂任務(不在 BT 模板裡):敘述(名稱/相位)自帶在 project.tasks 那筆,
+  // 一律手動排定 → 用單人 placer layoutSingleTask 直接落地,不進排程器。
+  const addCustomTask = useCallback(
+    async (pid, { name, startDay, startMin, hours, wait, assignee }) => {
+      const target = projects.find((p) => p.id === pid);
+      if (!target) return;
+
+      const ownerId = members.find((member) => member.role === 'owner')?.user_id ?? null;
+      const id = `c${crypto.randomUUID()}`; // c 前綴 uuid:不撞 BT id、不以 .1 結尾(不誤判外包子任務)
+
+      const taskEntry = {
+        id, enabled: true, custom: true,
+        n: name, p: 'custom',
+        // 釘選值一併存起來,雙擊編輯的初值才跟建立時一致、並標示為手動排定。
+        pinnedStart: startDay,
+        pinnedStartMin: startMin,
+        pinnedHours: hours,
+      };
+      // 未指派 = owner(不寫 assignee),比照 applyTaskDateChange / ProjectPage。
+      if (assignee && assignee !== ownerId) taskEntry.assignee = assignee;
+      if (wait != null) taskEntry.pinnedWait = wait;
+
+      const nextTasks = [...(target.tasks || []), taskEntry];
+      const availability = availabilityForTask(members, settings, nextTasks, id);
+      const startOffsetHours = startMin / 60 - SCHEDULE_START_HOUR;
+      const landed = layoutSingleTask(pD(startDay), hours, wait || 0, settings, availability, startOffsetHours);
+      const next = { ...target, tasks: nextTasks, schedule: { ...(target.schedule || {}), [id]: landed } };
+
+      const saved = await saveProjectToCloud(next);
+      setProjects((v) => v.map((p) => (p.id === saved.id ? saved : p)));
+    },
+    [projects, settings, members, saveProjectToCloud, setProjects],
+  );
+
+  // 刪除自訂任務:從 tasks 濾掉、schedule 刪對應落地 entry,存回。
+  const removeCustomTask = useCallback(
+    async (pid, taskId) => {
+      const target = projects.find((p) => p.id === pid);
+      if (!target) return;
+      const nextTasks = (target.tasks || []).filter((t) => t.id !== taskId);
+      const schedule = { ...(target.schedule || {}) };
+      delete schedule[taskId];
+      const saved = await saveProjectToCloud({ ...target, tasks: nextTasks, schedule });
+      setProjects((v) => v.map((p) => (p.id === saved.id ? saved : p)));
+    },
+    [projects, saveProjectToCloud, setProjects],
+  );
+
   const value = {
     projects, setProjects, settings, setSettings, loaded,
     sch, miles,
     saveProjectToCloud, insertProjectToCloud, archiveProjectInCloud,
     saveSettingsToCloud,
-    quickSchedule, applyTaskDateChange,
+    quickSchedule, applyTaskDateChange, addCustomTask, removeCustomTask,
   };
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }

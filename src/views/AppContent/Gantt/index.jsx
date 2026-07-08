@@ -1,17 +1,22 @@
 import { useState } from 'react';
 import { useWorkspace } from '../../../context/WorkspaceContext.jsx';
+import { usePermissions } from '../../../hooks/usePermissions.js';
 import { toneKey } from './utils.js';
 import GanttView from './GanttView/index.jsx';
 import CalendarWeek from './CalendarWeek/index.jsx';
+import AddTaskModal from './AddTaskModal/index.jsx';
 import styles from './Gantt.module.css';
 
 export default function Gantt() {
   // 這層只持有兩個視圖共用的狀態(專案篩選、模式切換)與篩選列 UI;
   // 甘特圖 / 行事曆的資料與邏輯各自在 GanttView / CalendarWeek 內取用。
   const { projects, sch: data } = useWorkspace();
+  const { can } = usePermissions();
+  const canEdit = can('editGantt'); // viewer 不能新增任務
 
   const [calendarMode, setCalendarMode] = useState(true);
   const [selected, setSelected] = useState(() => new Set(projects.map(project => project.id)));
+  const [showAdd, setShowAdd] = useState(false);
 
   const toggleProject = (id) => {
     setSelected(prev => {
@@ -55,6 +60,11 @@ export default function Gantt() {
         })}
         <span className={styles.filterCount}>· 顯示 {selected.size} / {projects.length} 個專案</span>
         <span className={styles.filterSpacer} />
+        {canEdit && (
+          <button className={styles.addBtn} onClick={() => setShowAdd(true)}>
+            <i className="ti ti-plus"></i>新增任務
+          </button>
+        )}
       </div>
 
       {calendarMode ? (
@@ -66,6 +76,13 @@ export default function Gantt() {
         <GanttView
           selectedProjects={selectedProjects}
           onToggleMode={() => setCalendarMode(true)}
+        />
+      )}
+
+      {showAdd && (
+        <AddTaskModal
+          defaultProjectId={selectedProjects[0]?.id}
+          onClose={() => setShowAdd(false)}
         />
       )}
     </div>

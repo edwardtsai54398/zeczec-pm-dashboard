@@ -317,14 +317,14 @@ function ProjectDetail({ p, onUpdate, miles, members, dirty, onSave, onArchive, 
               <i className="ti ti-x"></i>
             </button>
           )}
-          {canEdit && (
+          {/* {canEdit && (
             <button className={styles.saveBtn}
                     onClick={() => setConfirmSchedule(true)}
                     disabled={scheduling || !!scheduleReason}
                     title={scheduleReason || "快速排程：重新計算所有專案今天以後的任務排程"}>
               <i className="ti ti-calendar-plus"></i>{scheduling ? "排程中…" : "快速排程"}
             </button>
-          )}
+          )} */}
           {canEdit && onArchive && (
             <button className="iconbtn-x" onClick={onArchive} title="封存專案">
               <i className="ti ti-archive"></i>

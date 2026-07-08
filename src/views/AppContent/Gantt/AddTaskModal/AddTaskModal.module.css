@@ -1,5 +1,6 @@
-/* TaskEditModal(index.jsx)的 scoped 樣式:雙擊任務後彈出的排程設定彈窗
-   (遮罩、卡片、開始/結束時間列、0 工時、負責人、等待天數欄位、錯誤與 footer 按鈕)。 */
+/* AddTaskModal(index.jsx)的 scoped 樣式:甘特圖「新增任務」彈窗
+   (遮罩、卡片、任務名稱、專案、開始/結束時間列、0 工時、負責人、等待天數欄位、錯誤與 footer 按鈕)。
+   欄位比 TaskEditModal 多兩欄,卡片限高可捲動。 */
 
 .backdrop {
   position: fixed; inset: 0; z-index: 300;
@@ -8,7 +9,7 @@
 }
 .modal {
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: 14px; width: 380px;
+  border-radius: 14px; width: 380px; max-height: 90vh;
   box-shadow: 0 16px 48px rgba(0,0,0,.2);
   display: flex; flex-direction: column;
   font-size: 13px; overflow: hidden;
@@ -23,6 +24,7 @@
 .body {
   padding: 16px 20px;
   display: flex; flex-direction: column; gap: 14px;
+  overflow-y: auto;
 }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .label { font-size: 12px; font-weight: 500; color: var(--ink-2); }
@@ -64,10 +66,5 @@
 .btn.primary {
   background: var(--accent); color: var(--accent-ink);
   border-color: transparent;
-}
-/* 刪除自訂任務:錯誤紅(一次性強調色),靠左推開與取消/儲存分邊 */
-.btn.danger {
-  color: #b4453c; border-color: #b4453c; background: var(--surface);
-  margin-right: auto;
 }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }

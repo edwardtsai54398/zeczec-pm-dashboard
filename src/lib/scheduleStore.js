@@ -16,14 +16,17 @@ import {
   isBO as isBlackout,
 } from './dateUtils.js';
 
-// 由執行期 id 還原 BT 敘述性欄位;含外包展開的 .1 審核子任務(名稱前綴「(審核)」)。
-function baseTaskFor(taskId) {
+// 由執行期 id 還原任務敘述性欄位:先查 BT,再處理外包展開的 .1 審核子任務(名稱前綴「(審核)」),
+// 最後才是使用者手動新增的自訂任務——它不在 BT,敘述(名稱 n / 相位 p)自帶在 project.tasks 那筆上。
+function baseTaskFor(project, taskId) {
   const direct = BT.find((t) => t.id === taskId);
   if (direct) return direct;
   if (taskId.endsWith('.1')) {
     const parent = BT.find((t) => t.id === taskId.slice(0, -2));
     if (parent) return { ...parent, n: `(審核)${parent.n}` };
   }
+  const custom = (project.tasks || []).find((t) => t.id === taskId && t.custom);
+  if (custom) return { id: taskId, n: custom.n, p: custom.p };
   return null;
 }
 
@@ -53,7 +56,7 @@ function assigneeFromProject(project, taskId) {
 
 // 一筆已存 schedule entry → makeRecord 形狀的 record(日期字串轉回 Date)。
 function recordFromStored(project, taskId, stored) {
-  const base = baseTaskFor(taskId);
+  const base = baseTaskFor(project, taskId);
   if (!base) return null;
   const days = stored.days || {};
   const hours = stored.hours != null
@@ -141,6 +144,17 @@ export function freezeSchedule(schForPid) {
     };
   }
   return out;
+}
+
+// 使用者手動新增的自訂任務不進排程器(runScheduleV2 只認 BT),重算後 freezeSchedule 不會有它們;
+// 這支把 project 既有 schedule 裡屬於自訂任務的落地 entry 原封補回,避免快速排程/重排時被洗掉。
+export function preserveCustomTasks(project, schedule) {
+  const customIds = new Set((project.tasks || []).filter((t) => t.custom).map((t) => t.id));
+  const merged = { ...schedule };
+  for (const id of customIds) {
+    if (project.schedule?.[id]) merged[id] = project.schedule[id];
+  }
+  return merged;
 }
 
 // 從所有專案已存 schedule 挑出符合 predicate 的任務 → runScheduleV2 的 options.frozen。
